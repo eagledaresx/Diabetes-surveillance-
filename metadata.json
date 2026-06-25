@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Diabetes Surveillance App",
+  "description": "An Android-inspired app for monitoring fasting and post-fasting blood glucose, providing graphical reports, medication reminders, and medical guides.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
