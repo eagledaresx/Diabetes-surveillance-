@@ -388,14 +388,14 @@ export function MedicationInteractionChecker({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-extrabold text-white text-[11px] flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${conflict.rule.severity === "high" ? "bg-red-500 animate-pulse" : "bg-amber-500"}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${conflict.rule.severity === "high" ? "bg-red-500 animate-pulse" : "bg-orange-500"}`} />
                       {conflict.rule.title}
                     </span>
                     <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.2 rounded uppercase ${
                       conflict.rule.severity === "high" 
                         ? "bg-red-500/20 text-red-400 border border-red-500/30" 
                         : conflict.rule.severity === "moderate"
-                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
                         : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                     }`}>
                       {conflict.rule.severity === "high" ? "Critical Risk" : conflict.rule.severity === "moderate" ? "Moderate Warning" : "Caution"}
@@ -438,7 +438,7 @@ export function MedicationInteractionChecker({
       <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-3.5">
         <div className="border-b border-neutral-850 pb-2">
           <h4 className="font-bold text-neutral-200 uppercase tracking-widest text-[11px] font-mono flex items-center gap-2">
-            <span className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/25">
+            <span className="p-1.5 bg-cyan-500/10 text-cyan-400 rounded-lg border border-cyan-500/25">
               <ArrowRightLeft className="w-4 h-4" />
             </span>
             Ad-Hoc Interactive Checker Playground
@@ -490,7 +490,7 @@ export function MedicationInteractionChecker({
                     sandboxInteraction.rule?.severity === "high" 
                       ? "bg-red-500/10 text-red-400 border-red-500/20" 
                       : sandboxInteraction.rule?.severity === "moderate"
-                      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      ? "bg-orange-500/10 text-orange-300 border-orange-500/20"
                       : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                   }`}>
                     <AlertTriangle className="w-4 h-4 animate-pulse" />
@@ -507,7 +507,7 @@ export function MedicationInteractionChecker({
                   sandboxInteraction.rule?.severity === "high" 
                     ? "bg-red-500/25 text-red-400 border border-red-500/30" 
                     : sandboxInteraction.rule?.severity === "moderate"
-                    ? "bg-amber-500/25 text-amber-400 border border-amber-500/30"
+                    ? "bg-orange-500/25 text-orange-300 border border-orange-500/30"
                     : "bg-blue-500/25 text-blue-400 border border-blue-500/30"
                 }`}>
                   {sandboxInteraction.rule?.severity === "high" ? "Critical Risk" : sandboxInteraction.rule?.severity === "moderate" ? "Moderate Warning" : "Caution"}
@@ -598,7 +598,7 @@ export function MedicationInteractionChecker({
                         rule.severity === "high" 
                           ? "bg-red-500/15 text-red-400 border border-red-500/20" 
                           : rule.severity === "moderate"
-                          ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                          ? "bg-orange-500/15 text-orange-300 border border-orange-500/20"
                           : "bg-blue-500/15 text-blue-400 border border-blue-500/20"
                       }`}>
                         {rule.severity}

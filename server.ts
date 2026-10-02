@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
@@ -8,10 +9,21 @@ import { GoogleGenAI, Type } from "@google/genai";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Middleware for parsing JSON requests
 app.use(express.json());
+
+// Android APK Project Download Route
+app.get("/diabetes-surveillance-android-project.zip", (req, res) => {
+  const filePath = path.join(process.cwd(), "public", "diabetes-surveillance-android-project.zip");
+  if (fs.existsSync(filePath)) {
+    res.setHeader("Content-Disposition", "attachment; filename=diabetes-surveillance-android-project.zip");
+    res.setHeader("Content-Type", "application/zip");
+    return res.sendFile(filePath);
+  }
+  res.status(404).send("Android project archive not found");
+});
 
 // Initialize Gemini SDK with custom user agent and key from environment variables
 const ai = process.env.GEMINI_API_KEY
@@ -297,7 +309,7 @@ When explaining telemetry data, link it clearly to diabetic or metabolic outcome
     const fullMessage = `${backgroundPrompt}\n\nPatient Query: "${message}"`;
 
     const chat = ai.chats.create({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.8-flash",
       config: {
         systemInstruction,
       },
@@ -903,7 +915,7 @@ Structure the response to include the following detailed segments:
 Include a clear, bold medical disclaimer at the top stating that this is AI-guided information and should always be cross-referenced with their treating physician.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.8-flash",
       contents: queryPrompt,
       config: {
         responseMimeType: "application/json",
@@ -972,7 +984,7 @@ Provide a JSON response with the following fields:
 6. "glycemicCheckNote": A final concise tip on how this modified dish aligns with target fasting levels or insulin action (e.g. 'This contains active soluble fiber which delays stomach emptying. Ideal for post-lunch stability').`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.8-flash",
       contents: customizationPrompt,
       config: {
         responseMimeType: "application/json",
@@ -1056,7 +1068,9 @@ app.post("/api/surveillance-insights", async (req, res) => {
       ? `Age: ${userProfile.age || "N/A"}, Diabetes Type: ${userProfile.diabetesType || "N/A"}, Medications: ${userProfile.medications || "N/A"}, Target Fasting: ${userProfile.targetFastingMin || 70}-${userProfile.targetFastingMax || 130} mg/dL, Target Post-Fasting: ${userProfile.targetPostMin || 100}-${userProfile.targetPostMax || 180} mg/dL.`
       : "N/A";
 
-    const insightPrompt = `You are an expert Diabetes Surveillance Assistant. Analyze the customer's blood glucose logs and profile below. Provide professional surveillance feedback.
+    const insightPrompt = `You are an expert Diabetes Surveillance Assistant. Analyze the customer's blood glucose logs and profile below. Provide professional, non-diagnostic observational feedback.
+CRITICAL SAFETY INSTRUCTION: You must NEVER prescribe specific medication dose changes, recommend insulin unit adjustments, or output unvalidated medical diagnoses. Frame all feedback as general observations (e.g., "Your reading is elevated. Please consult your physician or follow your prescribed care plan").
+
 USER PROFILE:
 ${profileSummary}
 
@@ -1066,12 +1080,12 @@ ${readingsSummary}
 Perform surveillance and provide feedback using JSON.
 Identify:
 1. "summary": Structured conversational analysis of their glucose control (such as overall trends, average fasting, average post-fasting levels, comparison against standard targets, and whether their levels fluctuate significantly).
-2. "alerts": High-priority alerts if they have multiple hyper/hypoglycemia anomalies, or trends going in dangerous directions (e.g. persistently rising morning fasting sugar).
-3. "recommendations": Professional lifestyle, logging frequency, hydration, and medication timing habits they could discuss with their doctor. Always reference specific patterns found in their logs.
-Always include a clear medical disclaimer reminding the user that this does not constitute medical advice or substitute a real-time doctor's visit.`;
+2. "alerts": High-priority observational alerts if they have multiple hyper/hypoglycemia anomalies, or trends going in non-optimal directions (e.g. persistently rising morning fasting sugar).
+3. "recommendations": General lifestyle, logging frequency, hydration, and meal habit suggestions to discuss with their licensed physician. Always reference specific patterns found in their logs without prescribing drug changes.
+Always include a clear medical disclaimer reminding the user that this app provides reference data only and does not substitute a real-time physician consultation.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.8-flash",
       contents: insightPrompt,
       config: {
         responseMimeType: "application/json",
@@ -1101,7 +1115,11 @@ async function setupServer() {
   if (process.env.NODE_ENV !== "production") {
     console.log("Setting up development server with Vite middleware...");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR !== "true",
+        watch: process.env.DISABLE_HMR === "true" ? null : {},
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

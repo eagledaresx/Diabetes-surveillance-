@@ -68,7 +68,7 @@ export const GLOBAL_DIETARY_PROGRAMS: DietaryPlan[] = [
     region: "South Asia",
     countryOrCulture: "India, Pakistan, Bangladesh",
     flag: "🇮🇳",
-    vibeColor: "amber",
+    vibeColor: "orange",
     overview: "Vibrant and rich in anti-inflammatory spices like turmeric, ginger, and fenugreek. This program focuses on replacing high-glycemic staple grains with heritage millets, fiber-dense dal (lentils), and healthy vegetable curries to overcome insulin resistance.",
     glucoseSpikeConcern: "Refined white rice (like Jasmine/Basmati), refined wheat flatbreads (Maida Naan/Roti), and deep-fried starch snacks (Samosas) represent highly concentrated simple carbs.",
     superIngredients: [
@@ -82,7 +82,7 @@ export const GLOBAL_DIETARY_PROGRAMS: DietaryPlan[] = [
     meals: {
       breakfast: {
         name: "Low-Glycemic Methi & Moong Dal Chilla",
-        ingredients: "Sprouted yellow moong lentil batter, fresh fenugreek leaves, green chillies, and ginger paste.",
+        ingredients: "Sprouted split moong lentil batter, fresh fenugreek leaves, green chillies, and ginger paste.",
         desc: "Griddle-cooked savory pancake served with a robust sugar-free coconut chutney. Exceptionally rich in vegetarian protein and soluble fibers."
       },
       lunch: {
@@ -185,7 +185,7 @@ export const GLOBAL_DIETARY_PROGRAMS: DietaryPlan[] = [
     region: "Sub-Saharan Africa",
     countryOrCulture: "West Africa (Nigeria, Ghana, Senegal)",
     flag: "🇳🇬",
-    vibeColor: "yellow",
+    vibeColor: "teal",
     overview: "Utilizes abundant local leafy greens (efo), protein-dense cowpeas, okra, and healthy light pepper soups. This program restructures meals to prioritize fiber-dense soups over heavy starchy tubers to prevent metabolic fatigue.",
     glucoseSpikeConcern: "Heavy refined starchy tubers or swallows like white Yam Fufu, Cassava Garri, and sweetened plantain chips present extremely dense glycemic loads.",
     superIngredients: [

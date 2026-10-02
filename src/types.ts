@@ -59,8 +59,31 @@ export interface UserProfile {
   targetFastingMax: number; // Default 100 mg/dL
   targetPostMin: number;    // Default 100 mg/dL
   targetPostMax: number;    // Default 140 mg/dL
-  theme?: "dark" | "high-contrast-light";
+  theme?: "matte-slate" | "matte-terracotta" | "matte-steel" | "matte-chalk-light" | "dark" | "high-contrast-light";
+  targetHbA1c?: number; // Target HbA1c in %, e.g. 6.5
+  targetTimeInRange?: number; // Target Time In Range %, e.g. 75
+  targetDailyLogs?: number; // Target number of daily glucose logs, e.g. 3
+  doctorName?: string;
+  doctorEmail?: string;
+  doctorClinic?: string;
+  doctorPhone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  glucometerDevice?: {
+    name: string;
+    brand: string;
+    connectedAt: string;
+    lastSync?: string;
+    autoSync: boolean;
+  };
   weightHistory?: WeightHistoryEntry[];
+  biometricEnabled?: boolean;
+  pinCode?: string;
+  disclaimerAccepted?: boolean;
+  healthConnectSynced?: boolean;
+  membershipTier?: "free" | "pro" | "caregiver_plus";
+  membershipExpiry?: string;
+  trialActive?: boolean;
 }
 
 export interface FoodLog {
@@ -98,6 +121,20 @@ export interface ActivityLog {
   caloriesBurned?: number;
   notes?: string;
 }
+
+export interface FastingReminderConfig {
+  enabled: boolean;
+  targetTime: string; // Target scheduled check time e.g. "07:30"
+  leadMinutes: number; // Minutes before target time to notify (default 15)
+  soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  browserNotificationsEnabled: boolean;
+  prepChecklistEnabled: boolean;
+  customNotes?: string;
+  lastTriggeredDate?: string; // YYYY-MM-DD to avoid repeating on the same day
+  snoozedUntil?: number | null; // Timestamp
+}
+
 
 
 

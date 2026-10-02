@@ -68,21 +68,21 @@ export default function HydrationTracker() {
         return next;
       });
 
-      // Fire a glorious double-cannon celebratory confetti burst!
+      // Fire a celebratory confetti burst with matte colors
       try {
         confetti({
           particleCount: 70,
           angle: 60,
           spread: 60,
           origin: { x: 0.05, y: 0.8 },
-          colors: ["#3b82f6", "#60a5fa", "#2563eb", "#fbbf24", "#f59e0b", "#10b981"]
+          colors: ["#527394", "#6e91b5", "#5c8d90", "#547b69", "#b5736e"]
         });
         confetti({
           particleCount: 70,
           angle: 120,
           spread: 60,
           origin: { x: 0.95, y: 0.8 },
-          colors: ["#3b82f6", "#60a5fa", "#2563eb", "#fbbf24", "#f59e0b", "#10b981"]
+          colors: ["#527394", "#6e91b5", "#5c8d90", "#547b69", "#b5736e"]
         });
       } catch (err) {
         console.error("Confetti tracking trigger failed:", err);
@@ -225,8 +225,8 @@ export default function HydrationTracker() {
         {/* Streak & Units Switcher Group */}
         <div className="flex items-center gap-2">
           {currentStreak > 0 ? (
-            <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg text-[10px] font-bold text-amber-400 animate-fadeIn select-none shadow-sm h-6">
-              <Flame className="w-3.5 h-3.5 text-amber-500 fill-current animate-pulse shrink-0" />
+            <div className="flex items-center gap-1 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-lg text-[10px] font-bold text-cyan-400 animate-fadeIn select-none shadow-none h-6">
+              <Flame className="w-3.5 h-3.5 text-cyan-400 fill-current animate-pulse shrink-0" />
               <span>{currentStreak}d Streak</span>
             </div>
           ) : (
@@ -305,8 +305,8 @@ export default function HydrationTracker() {
           </div>
 
           {currentStreak > 0 && (
-            <span className="text-[9.5px] text-amber-400 font-semibold font-mono mt-1 text-center animate-fadeIn block leading-tight">
-              🔥 {currentStreak}-day streak active!
+            <span className="text-[9.5px] text-cyan-400 font-semibold font-mono mt-1 text-center animate-fadeIn block leading-tight">
+              💧 {currentStreak}-day streak active!
             </span>
           )}
         </div>
@@ -362,7 +362,7 @@ export default function HydrationTracker() {
             <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">Today's Intake Log History:</span>
             <button
               onClick={handleResetProgress}
-              className="text-[9px] font-extrabold text-[#f43f5e] hover:underline flex items-center gap-1 cursor-pointer select-none"
+              className="text-[9px] font-extrabold text-rose-400 hover:underline flex items-center gap-1 cursor-pointer select-none"
             >
               <RotateCcw className="w-2.5 h-2.5" />
               Reset Today

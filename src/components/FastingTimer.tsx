@@ -92,19 +92,19 @@ export default function FastingTimer({ readings }: FastingTimerProps) {
   }
 
   return (
-    <div className="bg-gradient-to-br from-[#121214] to-[#1a1a1f] border border-neutral-800 p-4 rounded-2xl relative overflow-hidden shadow-lg">
+    <div className="bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl relative overflow-hidden shadow-none">
       {/* Decorative ambient subtle circle glow */}
-      <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl" />
+      <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl" />
       
       {/* Upper header section */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl">
+          <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl">
             <Clock className="w-5 h-5" />
           </div>
           <div>
             <h3 className="text-xs font-bold text-white tracking-widest uppercase">Fasting Schedule Timer</h3>
-            <span className="text-[10px] text-amber-500 font-mono font-semibold block uppercase">Morning Surveillance Queue</span>
+            <span className="text-[10px] text-cyan-400 font-mono font-semibold block uppercase">Morning Surveillance Queue</span>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export default function FastingTimer({ readings }: FastingTimerProps) {
             <select
               value={targetHour}
               onChange={(e) => handleHourChange(parseInt(e.target.value, 10))}
-              className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer text-[10px]"
+              className="bg-transparent text-cyan-400 font-bold focus:outline-none cursor-pointer text-[10px]"
               aria-label="Select Target Morning Hour"
             >
               <option value="5" className="bg-neutral-900">05:00 AM</option>
@@ -151,7 +151,7 @@ export default function FastingTimer({ readings }: FastingTimerProps) {
             <span className="text-xl font-bold font-mono text-neutral-700">:</span>
 
             {/* Minutes digit */}
-            <span className="text-2xl font-black font-mono text-amber-400 tracking-tight">
+            <span className="text-2xl font-black font-mono text-cyan-400 tracking-tight">
               {timeLeft.minutes.toString().padStart(2, "0")}
             </span>
             <span className="text-[10px] text-neutral-500 font-mono mr-1">m</span>
@@ -169,10 +169,10 @@ export default function FastingTimer({ readings }: FastingTimerProps) {
         {/* Auxiliary morning layout button/trigger */}
         <div className="flex flex-col items-end text-right">
           <div className="flex items-center gap-1.5 text-neutral-300">
-            <Coffee className="w-3.5 h-3.5 text-amber-500" />
+            <Coffee className="w-3.5 h-3.5 text-cyan-400" />
             <span className="text-[11px] font-bold">Breakfast Rule</span>
           </div>
-          <span className="text-[9px] text-amber-500/80 font-semibold font-mono block mt-1">
+          <span className="text-[9px] text-cyan-400/80 font-semibold font-mono block mt-1">
             NPO (No food by mouth)
           </span>
         </div>
@@ -180,7 +180,7 @@ export default function FastingTimer({ readings }: FastingTimerProps) {
 
       {/* Contextual Medical guidance alert advice */}
       <div className="p-2.5 bg-neutral-950/40 border border-neutral-900 rounded-lg flex items-start gap-2.5 text-[10.5px] leading-relaxed text-neutral-300">
-        <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+        <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
         <p className="text-[10px] text-neutral-400 leading-snug">
           <span className="text-neutral-200 font-semibold uppercase tracking-wide text-[9px] mr-1 inline-block bg-neutral-800 px-1 rounded-sm">Guideline</span>
           {helperMessage} Typical target morning schedules range from <span className="text-white">6:00 AM to 8:30 AM</span>.

@@ -6,16 +6,238 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-:root {
-  /* Default references for charts and customization */
-  --chart-grid: #262626;
-  --chart-axis: #737373;
-  --reference-hypo-stroke: #3b82f6;
-  --reference-hypo-fill: #60a5fa;
-  --reference-hyper-stroke: #ef4444;
-  --reference-hyper-fill: #f87171;
-  --bg-frame: #020617; /* slate-950 */
-  --bg-shelf: #121214;
+:root,
+[data-theme="dark"],
+[data-theme="matte-slate"] {
+  /* Default Matte Slate & Sage Palette (Calm, non-glare, desaturated mineral tones) */
+  --chart-grid: #282d36;
+  --chart-axis: #788294;
+  --reference-hypo-stroke: #527394;
+  --reference-hypo-fill: #6e91b5;
+  --reference-hyper-stroke: #9e5b56;
+  --reference-hyper-fill: #b5736e;
+  --bg-frame: #0e1115;
+  --bg-shelf: #16191f;
+
+  /* Matte Accents - Desaturated, non-vibrant */
+  --color-rose-700: #783d39;
+  --color-rose-600: #8c4c47;
+  --color-rose-500: #9e5b56; /* Soft muted rosewood / terracotta */
+  --color-rose-400: #b5736e; /* Matte dusty rose */
+  --color-rose-300: #c98e8a;
+  --color-rose-950: #221818;
+
+  --color-pink-600: #7c5064;
+  --color-pink-500: #8e6076; /* Matte dusky mauve */
+  --color-pink-400: #a7788e;
+  --color-pink-950: #241820;
+
+  --color-cyan-600: #3c6568;
+  --color-cyan-500: #4a777a; /* Matte slate teal */
+  --color-cyan-400: #5c8d90; /* Matte dusty sea-celadon */
+  --color-cyan-300: #7da9ac;
+  --color-cyan-950: #152223;
+
+  --color-teal-700: #325350;
+  --color-teal-600: #3f6864;
+  --color-teal-500: #4e7874; /* Matte forest sage */
+  --color-teal-400: #65928d;
+  --color-teal-950: #152120;
+
+  --color-emerald-700: #385547;
+  --color-emerald-600: #456757;
+  --color-emerald-500: #547b69; /* Matte dried eucalyptus sage */
+  --color-emerald-400: #6c9582; /* Soft muted sage */
+  --color-emerald-300: #8bb19e;
+  --color-emerald-950: #16211a;
+
+  --color-sky-700: #344c60;
+  --color-sky-600: #415e77;
+  --color-sky-500: #4f708d; /* Matte dusty denim */
+  --color-sky-400: #678aa9; /* Soft overcast slate blue */
+  --color-sky-300: #88a8c4;
+  --color-sky-950: #151f28;
+
+  --color-blue-600: #455a73;
+  --color-blue-500: #566c88;
+  --color-blue-400: #7086a3;
+
+  --color-indigo-600: #515770;
+  --color-indigo-500: #626985;
+  --color-indigo-400: #79809d;
+
+  --color-purple-600: #594f6b;
+  --color-purple-500: #6d6182; /* Matte heather slate */
+  --color-purple-400: #85789b;
+
+  --color-orange-500: #9e6949; /* Matte ochre clay */
+  --color-orange-400: #b57e5c;
+  --color-amber-500: #9e6949;
+  --color-amber-400: #b57e5c;
+
+  /* Matte Charcoal Backgrounds & Panels - Low glare, velvety */
+  --color-neutral-950: #13161a; /* Base matte charcoal */
+  --color-neutral-900: #1c2026; /* Matte card panels */
+  --color-neutral-850: #242931; /* Raised item rows */
+  --color-neutral-800: #2d343f; /* Soft tactile borders */
+  --color-neutral-750: #373f4c;
+  --color-neutral-700: #434c5c;
+  --color-neutral-600: #5b6679;
+  --color-neutral-500: #788398;
+  --color-neutral-400: #9ca6b8; /* Calming, non-glare secondary text */
+  --color-neutral-300: #cbd2dc;
+  --color-neutral-200: #e3e7ee;
+  --color-neutral-100: #f1f4f8;
+}
+
+/* Warm Terracotta & Clay Matte Theme */
+[data-theme="matte-terracotta"] {
+  --chart-grid: #2e2927;
+  --chart-axis: #91847e;
+  --reference-hypo-stroke: #5e7382;
+  --reference-hypo-fill: #7d93a3;
+  --reference-hyper-stroke: #a86259;
+  --reference-hyper-fill: #c27b72;
+  --bg-frame: #141110;
+  --bg-shelf: #1c1817;
+
+  --color-rose-600: #944e47;
+  --color-rose-500: #a86259; /* Warm terracotta clay */
+  --color-rose-400: #c27b72;
+  --color-rose-300: #d69890;
+  --color-rose-950: #281917;
+
+  --color-pink-500: #9c6072;
+  --color-pink-400: #b8788c;
+
+  --color-cyan-500: #507775;
+  --color-cyan-400: #658f8d;
+  --color-cyan-300: #84adaa;
+
+  --color-teal-500: #55796c;
+  --color-teal-400: #6d9385;
+
+  --color-emerald-500: #5e7b5e; /* Dusty olive */
+  --color-emerald-400: #769576;
+  --color-emerald-300: #93b093;
+
+  --color-sky-500: #566f82;
+  --color-sky-400: #708a9e;
+
+  --color-orange-500: #a8724d; /* Warm dried pottery clay */
+  --color-orange-400: #c18861;
+  --color-amber-500: #a8724d;
+  --color-amber-400: #c18861;
+
+  --color-neutral-950: #171413; /* Warm stone charcoal */
+  --color-neutral-900: #211d1b;
+  --color-neutral-850: #292422;
+  --color-neutral-800: #332d2b;
+  --color-neutral-750: #3f3835;
+  --color-neutral-700: #4c4440;
+  --color-neutral-500: #887d77;
+  --color-neutral-400: #ad9f98;
+  --color-neutral-300: #cfc4bd;
+  --color-neutral-200: #e8dfd9;
+}
+
+/* Nordic Steel & Heather Matte Theme */
+[data-theme="matte-steel"] {
+  --chart-grid: #262b32;
+  --chart-axis: #7a8696;
+  --reference-hypo-stroke: #4d6d8a;
+  --reference-hypo-fill: #6c8ea7;
+  --reference-hyper-stroke: #995b64;
+  --reference-hyper-fill: #b4727c;
+  --bg-frame: #0d1014;
+  --bg-shelf: #14181f;
+
+  --color-rose-500: #995b64; /* Cool heather rose */
+  --color-rose-400: #b4727c;
+  --color-rose-950: #221619;
+
+  --color-cyan-500: #446e7b; /* Nordic fjord slate */
+  --color-cyan-400: #588593;
+  --color-cyan-300: #75a2af;
+
+  --color-teal-500: #477271;
+  --color-teal-400: #5d8a89;
+
+  --color-emerald-500: #4d7768; /* Lichen green */
+  --color-emerald-400: #659281;
+
+  --color-sky-500: #476885; /* Gunmetal steel blue */
+  --color-sky-400: #60829f;
+  --color-sky-300: #81a3bf;
+
+  --color-purple-500: #665b7c; /* Misty heather */
+  --color-purple-400: #7f7496;
+
+  --color-neutral-950: #12151a; /* Nordic deep slate */
+  --color-neutral-900: #191e25;
+  --color-neutral-850: #212730;
+  --color-neutral-800: #2b333e;
+  --color-neutral-750: #353e4c;
+  --color-neutral-700: #424c5b;
+  --color-neutral-500: #788598;
+  --color-neutral-400: #9aa7bb;
+  --color-neutral-300: #c6d0df;
+  --color-neutral-200: #e2e8f1;
+}
+
+/* Matte Sand & Chalk Light Mode (Gentle, low-contrast, non-glare daylight paper) */
+[data-theme="matte-chalk-light"] {
+  --chart-grid: #dedbd4;
+  --chart-axis: #545b67;
+  --reference-hypo-stroke: #45627a;
+  --reference-hypo-fill: #5b7b99;
+  --reference-hyper-stroke: #944d47;
+  --reference-hyper-fill: #aa5d57;
+  --bg-frame: #e5e3dc;
+  --bg-shelf: #eceae3;
+
+  --color-neutral-950: #f5f4ef; /* Paper chalk surface */
+  --color-neutral-900: #eae8e1; /* Soft warm sand cards */
+  --color-neutral-850: #e1dfd7; /* Raised rows */
+  --color-neutral-800: #d6d3c9; /* Subtle matte dividers */
+  --color-neutral-750: #c9c5ba;
+  --color-neutral-700: #b5b0a3;
+  --color-neutral-600: #8f8a7e;
+  --color-neutral-500: #636a75;
+  --color-neutral-400: #343942; /* Matte charcoal text */
+  --color-neutral-300: #21252b;
+  --color-neutral-200: #14171a;
+  --color-neutral-100: #0a0c0e;
+
+  --color-white: #1f2329;
+  --color-black: #f5f4ef;
+
+  --color-rose-500: #8c423c; /* Muted matte brick */
+  --color-rose-400: #773630;
+  --color-rose-950: #f8eceb;
+
+  --color-cyan-500: #355d60; /* Matte slate teal */
+  --color-cyan-400: #2b4f52;
+  --color-cyan-950: #eaf1f1;
+
+  --color-teal-500: #375e5b;
+  --color-teal-400: #2c4d4a;
+
+  --color-emerald-500: #3b614f; /* Muted pine sage */
+  --color-emerald-400: #305041;
+  --color-emerald-950: #e9f0ec;
+
+  --color-sky-500: #385770; /* Matte slate steel */
+  --color-sky-400: #2d485e;
+  --color-sky-950: #e9eff4;
+
+  --color-purple-500: #554869;
+  --color-purple-400: #453956;
+
+  --color-orange-500: #8a5736;
+  --color-orange-400: #74472b;
+  --color-amber-500: #8a5736;
+  --color-amber-400: #74472b;
 }
 
 /* High Contrast Light Mode Overrides */
@@ -24,28 +246,28 @@
   --color-neutral-950: #ffffff; /* Page body */
   --color-neutral-900: #f8f9fa; /* Cards, header */
   --color-neutral-850: #f1f3f5; /* Muted lists, section headers */
-  --color-neutral-800: #e9ecef; /* Separators, light borders */
-  --color-neutral-700: #ced4da; /* Inputs, interactive borders */
-  --color-neutral-600: #6ca1c4; 
-  --color-neutral-500: #495057; /* Subtitles, secondary text */
-  --color-neutral-400: #212529; /* High-contrast body text */
-  --color-neutral-300: #101112; /* Title text */
+  --color-neutral-800: #d1d5db; /* Separators, light borders */
+  --color-neutral-750: #9ca3af; /* Inputs, interactive borders */
+  --color-neutral-600: #4b5563; 
+  --color-neutral-500: #374151; /* Subtitles, secondary text */
+  --color-neutral-400: #111827; /* High-contrast body text */
+  --color-neutral-300: #030712; /* Title text */
   --color-neutral-200: #000000;
   --color-neutral-100: #000000;
 
   /* Overrides for alternative neutral groups to ensure consistent contrast */
   --color-zinc-950: #ffffff;
   --color-zinc-900: #f8f9fa;
-  --color-zinc-800: #e9ecef;
-  --color-zinc-700: #ced4da;
-  --color-zinc-500: #495057;
-  --color-zinc-400: #212529;
+  --color-zinc-800: #d1d5db;
+  --color-zinc-700: #9ca3af;
+  --color-zinc-500: #374151;
+  --color-zinc-400: #111827;
 
   --color-stone-950: #ffffff;
   --color-stone-900: #f8f9fa;
-  --color-stone-800: #e9ecef;
-  --color-stone-700: #212529;
-  --color-stone-400: #212529;
+  --color-stone-800: #d1d5db;
+  --color-stone-700: #111827;
+  --color-stone-400: #111827;
   --color-stone-300: #000000;
 
   /* Core text color overrides */
@@ -54,29 +276,97 @@
 
   /* Recharts settings */
   --chart-grid: #ced4da;
-  --chart-axis: #212529;
+  --chart-axis: #111827;
   --reference-hypo-stroke: #1d4ed8;
   --reference-hypo-fill: #1d4ed8;
   --reference-hyper-stroke: #b91c1c;
   --reference-hyper-fill: #b91c1c;
 
   /* Shell casing background override */
-  --bg-frame: #e9ecef; /* light gray surrounding slot */
-  --bg-shelf: #dee2e6; /* phone frame/bezel background */
+  --bg-frame: #e5e7eb; /* light gray surrounding slot */
+  --bg-shelf: #f3f4f6; /* phone frame/bezel background */
 
   /* High Contrast Stat elements */
-  --color-cyan-400: #0ea5e9; /* Fasting metrics text */
-  --color-cyan-300: #0284c7;
+  --color-cyan-400: #0284c7; /* Fasting metrics text */
+  --color-cyan-300: #0369a1;
   --color-rose-400: #dc2626; /* Post-fasting metrics */
-  --color-rose-300: #991b1b;
+  --color-rose-300: #b91c1c;
   --color-purple-400: #7c3aed; /* Glycemic variability rolling metrics */
-  --color-purple-300: #5b21b6;
+  --color-purple-300: #6d28d9;
   --color-sky-400: #2563eb; 
   --color-sky-300: #1d4ed8;
   --color-emerald-400: #16a34a; /* Normal range signals */
   --color-emerald-300: #15803d;
+  --color-teal-400: #0d9488;
+  --color-teal-300: #0f766e;
   --color-indigo-400: #4f46e5; 
   --color-indigo-300: #3730a3;
-  --color-amber-400: #d97706; /* Warnings / prediabetes thresholds */
-  --color-amber-300: #92400e;
+  --color-amber-400: #d97706;
+  --color-amber-300: #b45309;
 }
+
+/* Ensure solid/gradient action buttons keep crisp white text in High Contrast Light Mode */
+[data-theme="high-contrast-light"] button.bg-emerald-600,
+[data-theme="high-contrast-light"] button.bg-teal-600,
+[data-theme="high-contrast-light"] button.bg-rose-600,
+[data-theme="high-contrast-light"] button.bg-sky-600,
+[data-theme="high-contrast-light"] button.bg-blue-600,
+[data-theme="high-contrast-light"] button.bg-cyan-600,
+[data-theme="high-contrast-light"] button.bg-purple-600,
+[data-theme="high-contrast-light"] button[class*="from-emerald-"],
+[data-theme="high-contrast-light"] button[class*="from-teal-"],
+[data-theme="high-contrast-light"] button[class*="from-rose-"],
+[data-theme="high-contrast-light"] button[class*="from-cyan-"],
+[data-theme="high-contrast-light"] button[class*="bg-gradient-"],
+[data-theme="high-contrast-light"] .force-white-text {
+  --color-white: #ffffff !important;
+  color: #ffffff !important;
+}
+
+[data-theme="high-contrast-light"] button.bg-emerald-600 *,
+[data-theme="high-contrast-light"] button.bg-teal-600 *,
+[data-theme="high-contrast-light"] button.bg-rose-600 *,
+[data-theme="high-contrast-light"] button.bg-sky-600 *,
+[data-theme="high-contrast-light"] button.bg-blue-600 *,
+[data-theme="high-contrast-light"] button.bg-cyan-600 *,
+[data-theme="high-contrast-light"] button.bg-purple-600 *,
+[data-theme="high-contrast-light"] button[class*="from-emerald-"] *,
+[data-theme="high-contrast-light"] button[class*="from-teal-"] *,
+[data-theme="high-contrast-light"] button[class*="from-rose-"] *,
+[data-theme="high-contrast-light"] button[class*="from-cyan-"] *,
+[data-theme="high-contrast-light"] button[class*="bg-gradient-"] *,
+[data-theme="high-contrast-light"] .force-white-text * {
+  --color-white: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Ensure form controls have crisp boundaries in bright daylight */
+[data-theme="high-contrast-light"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="high-contrast-light"] select,
+[data-theme="high-contrast-light"] textarea {
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #9ca3af;
+}
+
+[data-theme="high-contrast-light"] input::placeholder,
+[data-theme="high-contrast-light"] textarea::placeholder {
+  color: #6b7280;
+}
+
+/* Recharts Brush Interactive Zoom Styling - Matte desaturated tone */
+.recharts-brush-slide {
+  fill: rgba(92, 141, 144, 0.15);
+  stroke: rgba(92, 141, 144, 0.4);
+}
+.recharts-brush-traveller rect {
+  fill: #4a777a;
+  stroke: #679295;
+  rx: 3px;
+}
+.recharts-brush-texts text {
+  fill: #8c97a8;
+  font-size: 9px;
+  font-family: var(--font-mono);
+}
+

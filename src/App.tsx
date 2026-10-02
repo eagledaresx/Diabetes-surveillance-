@@ -14,6 +14,7 @@ import {
   Search,
   Plus,
   Trash2,
+  Edit,
   Scale,
   CheckCircle2,
   XCircle,
@@ -38,7 +39,21 @@ import {
   Download,
   FileSpreadsheet,
   Utensils,
-  Zap
+  Zap,
+  ZoomIn,
+  ZoomOut,
+  SlidersHorizontal,
+  ClipboardList,
+  Palette,
+  Target,
+  Bluetooth,
+  ShieldAlert,
+  Share2,
+  Sun,
+  BellRing,
+  RotateCcw,
+  Crown,
+  Stethoscope
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -53,7 +68,9 @@ import {
   AreaChart,
   Area,
   ComposedChart,
-  Bar
+  Bar,
+  BarChart,
+  Brush
 } from "recharts";
 
 import AndroidFrame from "./components/AndroidFrame";
@@ -63,10 +80,39 @@ import HydrationTracker from "./components/HydrationTracker";
 import FoodLogger from "./components/FoodLogger";
 import OpenWearablesHub from "./components/OpenWearablesHub";
 import { MedicationInteractionChecker } from "./components/MedicationInteractionChecker";
+import MedicalDisclaimerModal from "./components/MedicalDisclaimerModal";
+import BiometricLockModal from "./components/BiometricLockModal";
+import HypoglycemiaAlertModal from "./components/HypoglycemiaAlertModal";
+import { GlucometerSyncModal } from "./components/GlucometerSyncModal";
+import { DangerousGlucoseAlertModal } from "./components/DangerousGlucoseAlertModal";
+import { LifestyleCorrelationView } from "./components/LifestyleCorrelationView";
+import { GoalsAndProgressModal } from "./components/GoalsAndProgressModal";
+import { EducationalResources } from "./components/EducationalResources";
+import { WeeklyReviewModal } from "./components/WeeklyReviewModal";
+import { AndroidInstallModal } from "./components/AndroidInstallModal";
+import { PWAInstallButton } from "./components/PWAInstallButton";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 import { getApiUrl } from "./lib/api";
 import { motion, AnimatePresence } from "motion/react";
-import { GlucoseReading, MedicationReminder, MedicationLog, MedicineDetails, UserProfile as UserProfileType, FoodLog, PrescribedMedication, ActivityLog } from "./types";
+import { GlucoseReading, MedicationReminder, MedicationLog, MedicineDetails, UserProfile as UserProfileType, FoodLog, PrescribedMedication, ActivityLog, FastingReminderConfig } from "./types";
+import { FastingGlucoseReminder } from "./components/FastingGlucoseReminder";
+import { FastingAlertBanner } from "./components/FastingAlertBanner";
+import { MonetizationHubModal } from "./components/MonetizationHubModal";
+import {
+  DEFAULT_FASTING_REMINDER_CONFIG,
+  calculatePreAlertTime,
+  isAlertTimeNow,
+  playNotificationChime,
+  triggerHaptic,
+  sendNativeNotification
+} from "./lib/notifications";
 import ComprehensiveHistory from "./components/ComprehensiveHistory";
+import { AiAssistantTab } from "./components/AiAssistantTab";
+import { WalkingTracker } from "./components/WalkingTracker";
+import { FamilyMonitoring } from "./components/FamilyMonitoring";
+import { DietPlanner } from "./components/DietPlanner";
+import { DoctorReport } from "./components/DoctorReport";
+import { useChartBrushSync } from "./hooks/useChartBrushSync";
 import { MEDICINE_LIST, PRELOADED_MEDICINES } from "./data";
 import { GLOBAL_DIETARY_PROGRAMS } from "./data/diets";
 
@@ -294,7 +340,7 @@ const DEFAULT_PROFILE: UserProfileType = {
   targetFastingMax: 100,
   targetPostMin: 100,
   targetPostMax: 140,
-  theme: "dark",
+  theme: "matte-slate",
   weightHistory: [
     { id: "w1", date: "2026-05-10", weight: 75.0 },
     { id: "w2", date: "2026-05-17", weight: 74.2 },
@@ -351,7 +397,7 @@ function computeVariabilityData(readingsList: GlucoseReading[]): any[] {
   });
 }
 
-type AppTab = "dashboard" | "reports" | "reminders" | "handbook" | "profile" | "history";
+type AppTab = "dashboard" | "reports" | "reminders" | "handbook" | "profile" | "history" | "diet" | "walking" | "assistant" | "family";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>("dashboard");
@@ -359,7 +405,26 @@ export default function App() {
   
   // States loaded from LocalStorage
   const [readings, setReadings] = useState<GlucoseReading[]>([]);
-  const [dashboardSubTab, setDashboardSubTab] = useState<"logs" | "food" | "wearables">("logs");
+  const [dashboardSubTab, setDashboardSubTab] = useState<"logs" | "correlations" | "food" | "wearables">("logs");
+  const [showAndroidModal, setShowAndroidModal] = useState<boolean>(false);
+  const [isFullscreenAndroid, setIsFullscreenAndroid] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(display-mode: standalone)").matches || window.innerWidth <= 640;
+  });
+  const [showGlucometerModal, setShowGlucometerModal] = useState<boolean>(false);
+  const [showGoalsModal, setShowGoalsModal] = useState<boolean>(false);
+  const [showWeeklyReviewModal, setShowWeeklyReviewModal] = useState<boolean>(false);
+  const [educationSubTab, setEducationSubTab] = useState<"clinical_guides" | "cultural_diets">("clinical_guides");
+  const [doubleDoseModal, setDoubleDoseModal] = useState<{
+    isOpen: boolean;
+    reminder: MedicationReminder | null;
+    lastTakenTime: string;
+    units?: number;
+  }>({
+    isOpen: false,
+    reminder: null,
+    lastTakenTime: ""
+  });
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [prefilledFood, setPrefilledFood] = useState<{
     mealType: FoodLog["mealType"];
@@ -369,7 +434,10 @@ export default function App() {
   } | null>(null);
   const [reminders, setReminders] = useState<MedicationReminder[]>([]);
   const [prescribedMeds, setPrescribedMeds] = useState<PrescribedMedication[]>([]);
-  const [remindersSubTab, setRemindersSubTab] = useState<"checklist" | "prescriptions" | "checker">("checklist");
+  const [remindersSubTab, setRemindersSubTab] = useState<"checklist" | "fasting" | "prescriptions" | "checker">("checklist");
+  const [fastingReminderConfig, setFastingReminderConfig] = useState<FastingReminderConfig>(DEFAULT_FASTING_REMINDER_CONFIG);
+  const [showFastingAlertModal, setShowFastingAlertModal] = useState(false);
+  const [showMonetizationModal, setShowMonetizationModal] = useState(false);
   const [newPresMedForm, setNewPresMedForm] = useState(false);
   const [presMedName, setPresMedName] = useState("");
   const [presMedDosage, setPresMedDosage] = useState("");
@@ -380,6 +448,7 @@ export default function App() {
   const [presMedAddAlarm, setPresMedAddAlarm] = useState(true);
   const [presMedAlarmTime, setPresMedAlarmTime] = useState("08:00");
   const [presMedAlarmTiming, setPresMedAlarmTiming] = useState<MedicationReminder["timing"]>("before_breakfast");
+  const [editingPresMedId, setEditingPresMedId] = useState<string | null>(null);
   const [medLogs, setMedLogs] = useState<MedicationLog[]>([]);
   const [profile, setProfile] = useState<UserProfileType>(DEFAULT_PROFILE);
   const [profiles, setProfiles] = useState<UserProfileType[]>([]);
@@ -437,12 +506,34 @@ export default function App() {
   const [insightsError, setInsightsError] = useState("");
   const [exportFeedback, setExportFeedback] = useState("");
 
+  // Play Store & Clinical Compliance Modals State
+  const [disclaimerModalOpen, setDisclaimerModalOpen] = useState(() => {
+    return localStorage.getItem("dia_disclaimer_accepted") !== "true";
+  });
+  const [isBiometricLocked, setIsBiometricLocked] = useState(false);
+  const [dangerousAlert, setDangerousAlert] = useState<{
+    isOpen: boolean;
+    value: number;
+    dateStr?: string;
+    timeStr?: string;
+    type?: "fasting" | "post_fasting";
+  }>({
+    isOpen: false,
+    value: 65
+  });
+
   // Chart visual filters
   const [chartFilter, setChartFilter] = useState<"all" | "fasting" | "post_fasting">("all");
   const [reportChartType, setReportChartType] = useState<"trend" | "variability" | "weight" | "adherence">("trend");
   const [reportTimeRange, setReportTimeRange] = useState<"7" | "30" | "90" | "365" | "custom">("30");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [reportChartStyle, setReportChartStyle] = useState<"line" | "bar">("line");
+  const [reportAggregation, setReportAggregation] = useState<"raw" | "daily" | "weekly" | "monthly">("raw");
+  const [showRegressionLines, setShowRegressionLines] = useState<boolean>(() => {
+    const saved = localStorage.getItem("glucose_show_regression_lines");
+    return saved !== null ? saved === "true" : true;
+  });
 
   // Medication interactive states
   const [newReminderForm, setNewReminderForm] = useState(false);
@@ -517,6 +608,10 @@ export default function App() {
 
     const activeProf = parsedProfiles.find(p => p.id === parsedActiveId) || parsedProfiles[0];
     setProfile(activeProf);
+
+    if (activeProf && activeProf.biometricEnabled) {
+      setIsBiometricLocked(true);
+    }
 
     localStorage.setItem("dia_profiles", JSON.stringify(parsedProfiles));
     localStorage.setItem("dia_active_profile_id", parsedActiveId);
@@ -651,13 +746,132 @@ export default function App() {
       setFoodLogs(initialFoodLogs);
       localStorage.setItem("dia_foodlogs", JSON.stringify(initialFoodLogs));
     }
+
+    const localFastingConfig = localStorage.getItem("dia_fasting_reminder_config");
+    if (localFastingConfig) {
+      try {
+        setFastingReminderConfig(JSON.parse(localFastingConfig));
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }, []);
+
+  const handleUpdateFastingConfig = (newConfig: FastingReminderConfig) => {
+    setFastingReminderConfig(newConfig);
+    localStorage.setItem("dia_fasting_reminder_config", JSON.stringify(newConfig));
+  };
+
+  const handleUpdateMembershipTier = (tier: "free" | "pro" | "caregiver_plus") => {
+    const updated = {
+      ...profile,
+      membershipTier: tier
+    };
+    setProfile(updated);
+    localStorage.setItem("dia_profile", JSON.stringify(updated));
+  };
+
+  const handleSnoozeFastingAlert = (minutes: number) => {
+    const updated = {
+      ...fastingReminderConfig,
+      snoozedUntil: Date.now() + minutes * 60 * 1000
+    };
+    handleUpdateFastingConfig(updated);
+    setShowFastingAlertModal(false);
+  };
+
+  const handleLogFastingFromReminder = () => {
+    setShowFastingAlertModal(false);
+    setLogType("fasting");
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const dateStr = now.toISOString().split("T")[0];
+    setLogTime(timeStr);
+    setLogDate(dateStr);
+    setActiveTab("dashboard");
+    setTimeout(() => {
+      const el = document.getElementById("input-glucose-val");
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+  };
+
+  // 15-Minute Morning Fasting Glucose Alert Background Check Ticker
+  useEffect(() => {
+    const checkFastingAlert = async () => {
+      if (!fastingReminderConfig.enabled) return;
+
+      // If currently snoozed, check if snooze window has expired
+      if (fastingReminderConfig.snoozedUntil && Date.now() < fastingReminderConfig.snoozedUntil) {
+        return;
+      }
+
+      const now = new Date();
+      const todayStamp = now.toISOString().split("T")[0];
+
+      // Avoid duplicate alert triggers for today unless explicitly testing
+      if (fastingReminderConfig.lastTriggeredDate === todayStamp && !fastingReminderConfig.snoozedUntil) {
+        return;
+      }
+
+      const { preAlertTime, formattedTarget } = calculatePreAlertTime(
+        fastingReminderConfig.targetTime,
+        fastingReminderConfig.leadMinutes
+      );
+
+      if (isAlertTimeNow(preAlertTime)) {
+        const updatedConfig = {
+          ...fastingReminderConfig,
+          lastTriggeredDate: todayStamp,
+          snoozedUntil: null
+        };
+        setFastingReminderConfig(updatedConfig);
+        localStorage.setItem("dia_fasting_reminder_config", JSON.stringify(updatedConfig));
+
+        if (fastingReminderConfig.soundEnabled) {
+          playNotificationChime();
+        }
+
+        if (fastingReminderConfig.vibrationEnabled) {
+          triggerHaptic([200, 100, 200, 100, 300]);
+        }
+
+        if (fastingReminderConfig.browserNotificationsEnabled) {
+          await sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
+            body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`,
+            tag: "morning-fasting-glucose-precheck"
+          });
+        }
+
+        setShowFastingAlertModal(true);
+      }
+    };
+
+    checkFastingAlert();
+    const interval = setInterval(checkFastingAlert, 25000);
+    return () => clearInterval(interval);
+  }, [fastingReminderConfig]);
 
   // Synchronize CSS variable theme overrides based on patient profile selection
   useEffect(() => {
-    const activeTheme = profile.theme || "dark";
+    const activeTheme = profile.theme || "matte-slate";
     document.documentElement.setAttribute("data-theme", activeTheme);
   }, [profile.theme]);
+
+  // Auto-lock when waking from background or switching away if Biometric Security is enabled
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && profile.biometricEnabled) {
+        setIsBiometricLocked(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [profile.biometricEnabled]);
 
   // Sync tab transitions helper for Android native back pressed
   const changeTab = (tab: AppTab) => {
@@ -709,7 +923,7 @@ export default function App() {
       targetFastingMax: 100,
       targetPostMin: 100,
       targetPostMax: 140,
-      theme: "dark",
+      theme: "matte-slate",
       weightHistory: []
     };
 
@@ -824,6 +1038,17 @@ export default function App() {
     setReadings(updated);
     localStorage.setItem("dia_readings", JSON.stringify(updated));
 
+    // Trigger Dangerous Blood Sugar Alert System if reading is below threshold (< 70 mg/dL) or high (> 180 mg/dL)
+    if (val < 70 || val > 180) {
+      setDangerousAlert({
+        isOpen: true,
+        value: val,
+        dateStr: logDate || new Date().toISOString().split("T")[0],
+        timeStr: logTime || "08:00",
+        type: logType
+      });
+    }
+
     // Reset logs
     setLogValue("");
     setLogNotes("");
@@ -834,6 +1059,62 @@ export default function App() {
     const updated = readings.filter(r => r.id !== id);
     setReadings(updated);
     localStorage.setItem("dia_readings", JSON.stringify(updated));
+  };
+
+  // Glucometer device data batch synchronization handler
+  const handleImportGlucometerReadings = (imported: GlucoseReading[]) => {
+    if (!imported || imported.length === 0) return;
+    const combined = [...imported, ...readings];
+    // Deduplicate by date + time + value
+    const uniqueMap = new Map<string, GlucoseReading>();
+    combined.forEach(r => uniqueMap.set(`${r.date}_${r.time}_${r.value}`, r));
+    const unique = Array.from(uniqueMap.values());
+    unique.sort((a, b) => new Date(`${b.date}T${b.time}`).getTime() - new Date(`${a.date}T${a.time}`).getTime());
+    setReadings(unique);
+    localStorage.setItem("dia_readings", JSON.stringify(unique));
+
+    // Check if newest reading is dangerous
+    const newest = imported[0];
+    if (newest && (newest.value < 70 || newest.value > 180)) {
+      setDangerousAlert({
+        isOpen: true,
+        value: newest.value,
+        dateStr: newest.date,
+        timeStr: newest.time,
+        type: newest.type
+      });
+    }
+  };
+
+  // User Profile goal & metadata synchronization handler
+  const handleUpdateProfile = (updatedProfile: UserProfileType) => {
+    setProfile(updatedProfile);
+    localStorage.setItem("dia_profile", JSON.stringify(updatedProfile));
+  };
+
+  // Full clinical backup restore handler
+  const handleRestoreBackup = (backup: any) => {
+    if (!backup) return;
+    if (backup.profile) {
+      setProfile(backup.profile);
+      localStorage.setItem("dia_profile", JSON.stringify(backup.profile));
+    }
+    if (backup.readings && Array.isArray(backup.readings)) {
+      setReadings(backup.readings);
+      localStorage.setItem("dia_readings", JSON.stringify(backup.readings));
+    }
+    if (backup.foodLogs && Array.isArray(backup.foodLogs)) {
+      setFoodLogs(backup.foodLogs);
+      localStorage.setItem("dia_foodlogs", JSON.stringify(backup.foodLogs));
+    }
+    if (backup.activityLogs && Array.isArray(backup.activityLogs)) {
+      setActivityLogs(backup.activityLogs);
+      localStorage.setItem("dia_activitylogs", JSON.stringify(backup.activityLogs));
+    }
+    if (backup.medicationLogs && Array.isArray(backup.medicationLogs)) {
+      setMedLogs(backup.medicationLogs);
+      localStorage.setItem("dia_medlogs", JSON.stringify(backup.medicationLogs));
+    }
   };
 
   // Food Intake Logging Handlers
@@ -903,6 +1184,16 @@ export default function App() {
     const updatedReadings = [newReading, ...readings];
     setReadings(updatedReadings);
     localStorage.setItem("dia_readings", JSON.stringify(updatedReadings));
+
+    if (value < 70 || value > 180) {
+      setDangerousAlert({
+        isOpen: true,
+        value,
+        dateStr: date,
+        timeStr: time,
+        type
+      });
+    }
   };
 
   // Add Custom Pill Reminder logic
@@ -1169,6 +1460,18 @@ export default function App() {
     }
   };
 
+  const handleStartEditPrescribedMed = (med: PrescribedMedication) => {
+    setEditingPresMedId(med.id);
+    setPresMedName(med.name);
+    setPresMedDosage(med.dosage);
+    setPresMedFrequency(med.frequency);
+    setPresMedDescription(med.description || "");
+    setPresMedSideEffects(med.sideEffects ? med.sideEffects.join(", ") : "");
+    setPresMedSpecialInstructions(med.specialInstructions || "");
+    setPresMedAddAlarm(false); // don't auto-re-add alarm
+    setNewPresMedForm(true);
+  };
+
   const handleAddPrescribedMed = (e: React.FormEvent) => {
     e.preventDefault();
     if (!presMedName.trim()) return;
@@ -1202,37 +1505,57 @@ export default function App() {
       finalSpecialInstructions = "Take as directed by your physician.";
     }
 
-    const newMed: PrescribedMedication = {
-      id: "pres_" + Date.now(),
-      name: presMedName.trim(),
-      dosage: presMedDosage.trim() || "As directed",
-      frequency: presMedFrequency || "Once daily",
-      description: finalDesc,
-      sideEffects: finalSideEffects,
-      specialInstructions: finalSpecialInstructions
-    };
-
-    const updatedMeds = [...prescribedMeds, newMed];
-    setPrescribedMeds(updatedMeds);
-    localStorage.setItem("dia_prescribed_meds", JSON.stringify(updatedMeds));
-
-    // Optional: add a daily checklist alarm reminder
-    if (presMedAddAlarm) {
-      const isInsulin = presMedName.toLowerCase().includes("insulin");
-      const newRem: MedicationReminder = {
-        id: "rem_" + Date.now(),
+    if (editingPresMedId) {
+      const updatedMeds = prescribedMeds.map(m => {
+        if (m.id === editingPresMedId) {
+          return {
+            ...m,
+            name: presMedName.trim(),
+            dosage: presMedDosage.trim() || "As directed",
+            frequency: presMedFrequency || "Once daily",
+            description: finalDesc,
+            sideEffects: finalSideEffects,
+            specialInstructions: finalSpecialInstructions
+          };
+        }
+        return m;
+      });
+      setPrescribedMeds(updatedMeds);
+      localStorage.setItem("dia_prescribed_meds", JSON.stringify(updatedMeds));
+      setEditingPresMedId(null);
+    } else {
+      const newMed: PrescribedMedication = {
+        id: "pres_" + Date.now(),
         name: presMedName.trim(),
         dosage: presMedDosage.trim() || "As directed",
-        timing: presMedAlarmTiming,
-        times: [presMedAlarmTime],
-        frequency: presMedFrequency,
-        active: true,
-        isInsulin: isInsulin,
-        notes: `Prescription alarm synced`
+        frequency: presMedFrequency || "Once daily",
+        description: finalDesc,
+        sideEffects: finalSideEffects,
+        specialInstructions: finalSpecialInstructions
       };
-      const updatedRems = [...reminders, newRem];
-      setReminders(updatedRems);
-      localStorage.setItem("dia_reminders", JSON.stringify(updatedRems));
+
+      const updatedMeds = [...prescribedMeds, newMed];
+      setPrescribedMeds(updatedMeds);
+      localStorage.setItem("dia_prescribed_meds", JSON.stringify(updatedMeds));
+
+      // Optional: add a daily checklist alarm reminder
+      if (presMedAddAlarm) {
+        const isInsulin = presMedName.toLowerCase().includes("insulin");
+        const newRem: MedicationReminder = {
+          id: "rem_" + Date.now(),
+          name: presMedName.trim(),
+          dosage: presMedDosage.trim() || "As directed",
+          timing: presMedAlarmTiming,
+          times: [presMedAlarmTime],
+          frequency: presMedFrequency,
+          active: true,
+          isInsulin: isInsulin,
+          notes: `Prescription alarm synced`
+        };
+        const updatedRems = [...reminders, newRem];
+        setReminders(updatedRems);
+        localStorage.setItem("dia_reminders", JSON.stringify(updatedRems));
+      }
     }
 
     // Reset form states
@@ -1254,32 +1577,64 @@ export default function App() {
     localStorage.setItem("dia_prescribed_meds", JSON.stringify(updated));
   };
 
-  // Mark medication taken today
+  // Mark medication taken today with double-dose safety prevention
   const handleMarkTaken = (reminder: MedicationReminder, units?: number) => {
     const stamp = new Date().toISOString().split("T")[0];
     const logId = `log_${reminder.id}_${stamp}`;
     
-    // Check if ready existing
-    const exists = medLogs.some(l => l.dateStamp === stamp && l.reminderId === reminder.id);
-    if (exists) {
-      // Toggle off / remove
-      const updated = medLogs.filter(l => !(l.dateStamp === stamp && l.reminderId === reminder.id));
-      setMedLogs(updated);
-      localStorage.setItem("dia_medlogs", JSON.stringify(updated));
-    } else {
-      // Record new take
-      const newL: MedicationLog = {
-        id: logId,
-        reminderId: reminder.id,
-        medicineName: reminder.name,
-        takenAt: new Date().toISOString(),
-        dateStamp: stamp,
-        unitsAdministered: reminder.isInsulin ? (units ?? 10) : undefined
-      };
-      const updated = [...medLogs, newL];
-      setMedLogs(updated);
-      localStorage.setItem("dia_medlogs", JSON.stringify(updated));
+    // Check if already taken today
+    const existingLog = medLogs.find(l => l.dateStamp === stamp && l.reminderId === reminder.id);
+    if (existingLog) {
+      // Prevent accidental double-dosing by showing safety confirmation
+      const takenTime = existingLog.takenAt 
+        ? new Date(existingLog.takenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "earlier today";
+      setDoubleDoseModal({
+        isOpen: true,
+        reminder,
+        lastTakenTime: takenTime,
+        units
+      });
+      return;
     }
+
+    // Record new dose intake
+    const newL: MedicationLog = {
+      id: logId,
+      reminderId: reminder.id,
+      medicineName: reminder.name,
+      takenAt: new Date().toISOString(),
+      dateStamp: stamp,
+      unitsAdministered: reminder.isInsulin ? (units ?? 10) : undefined
+    };
+    const updated = [...medLogs, newL];
+    setMedLogs(updated);
+    localStorage.setItem("dia_medlogs", JSON.stringify(updated));
+  };
+
+  const handleConfirmDoubleDose = (reminder: MedicationReminder, units?: number) => {
+    const stamp = new Date().toISOString().split("T")[0];
+    const logId = `log_${reminder.id}_${stamp}_extra_${Date.now()}`;
+    const newL: MedicationLog = {
+      id: logId,
+      reminderId: reminder.id,
+      medicineName: reminder.name,
+      takenAt: new Date().toISOString(),
+      dateStamp: stamp,
+      unitsAdministered: reminder.isInsulin ? (units ?? 10) : undefined
+    };
+    const updated = [...medLogs, newL];
+    setMedLogs(updated);
+    localStorage.setItem("dia_medlogs", JSON.stringify(updated));
+    setDoubleDoseModal({ isOpen: false, reminder: null, lastTakenTime: "" });
+  };
+
+  const handleUndoMedLog = (reminderId: string) => {
+    const stamp = new Date().toISOString().split("T")[0];
+    const updated = medLogs.filter(l => !(l.dateStamp === stamp && l.reminderId === reminderId));
+    setMedLogs(updated);
+    localStorage.setItem("dia_medlogs", JSON.stringify(updated));
+    setDoubleDoseModal({ isOpen: false, reminder: null, lastTakenTime: "" });
   };
 
   // AI-mediated Medicine Search from backend API proxy to protect API keys
@@ -1416,7 +1771,7 @@ export default function App() {
       case "Normal":
         return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
       case "Prediabetes":
-        return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+        return "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
       case "Diabetes":
         return "bg-orange-500/10 text-orange-400 border-orange-500/30";
       case "Severe Hyperglycemia":
@@ -1431,10 +1786,59 @@ export default function App() {
     return t.replace("_", " ").toUpperCase();
   };
 
-  // Daily medication count taken status
+  // Daily medication count taken status & Daily Management KPIs
   const activeReminders = reminders.filter(r => r.active);
   const currentStamp = new Date().toISOString().split("T")[0];
-  const pillsTakenToday = medLogs.filter(l => l.dateStamp === currentStamp).length;
+  const todayLocalStamp = new Date().toLocaleDateString("en-CA");
+  const isTodayDate = (d?: string) => d === currentStamp || d === todayLocalStamp;
+
+  // Distinct completed active alarms today
+  const completedAlarmsCount = activeReminders.filter(r =>
+    medLogs.some(l => isTodayDate(l.dateStamp) && l.reminderId === r.id)
+  ).length;
+
+  const complianceScore = activeReminders.length > 0
+    ? Math.min(100, Math.round((completedAlarmsCount / activeReminders.length) * 100))
+    : 100;
+
+  const pillsTakenToday = completedAlarmsCount;
+
+  // Today's glucose surveillance logs
+  const todayGlucoseReadings = readings.filter(r => isTodayDate(r.date));
+  const todayLogCount = todayGlucoseReadings.length;
+  const todayFastingCount = todayGlucoseReadings.filter(r => r.type === "fasting").length;
+  const todayPostCount = todayGlucoseReadings.filter(r => r.type === "post_fasting").length;
+
+  const currentFormattedDate = useMemo(() => {
+    return new Date().toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  }, []);
+
+  const dailyStatusBadge = useMemo(() => {
+    if (todayLogCount >= 2 && complianceScore === 100) {
+      return {
+        label: "Target Met",
+        classes: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+        dotClass: "bg-emerald-400"
+      };
+    }
+    if (todayLogCount > 0 || complianceScore >= 50) {
+      return {
+        label: "In Progress",
+        classes: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
+        dotClass: "bg-cyan-400"
+      };
+    }
+    return {
+      label: "Pending Action",
+      classes: "bg-rose-500/10 text-rose-400 border-rose-500/30",
+      dotClass: "bg-rose-400 animate-pulse"
+    };
+  }, [todayLogCount, complianceScore]);
 
   // Dynamic benchmark reference date for the time-window filters
   const getBenchmarkDate = () => {
@@ -1501,36 +1905,156 @@ export default function App() {
     return a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
   });
 
-  // Chart data preparing: sort chronologically for Recharts mapping safety
-  const chartData = rangeSortedReadings.map(r => ({
-    ...r,
-    formattedLabel: `${r.date.substring(5)} ${r.time}`,
-    fastingValue: r.type === "fasting" ? r.value : null,
-    postValue: r.type === "post_fasting" ? r.value : null,
-  }));
+  // Helper: get Monday date string
+  const getMondayStr = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const mon = new Date(d.setDate(diff));
+    return mon.toISOString().split("T")[0];
+  };
 
-  const filteredRawData = chartData.filter(item => {
-    if (chartFilter === "fasting") return item.type === "fasting";
-    if (chartFilter === "post_fasting") return item.type === "post_fasting";
-    return true;
-  });
+  // Chart data preparing: support raw, daily, weekly, monthly aggregation
+  const aggregatedData = useMemo(() => {
+    if (reportAggregation === "raw") {
+      return rangeSortedReadings.map(r => ({
+        ...r,
+        formattedLabel: `${r.date.substring(5)} ${r.time}`,
+        fastingValue: r.type === "fasting" ? r.value : null,
+        postValue: r.type === "post_fasting" ? r.value : null,
+        isAggregated: false,
+        rawLogsCount: 1,
+      }));
+    }
 
-  const fastingRegPoints = filteredRawData
-    .map((item, idx) => ({ x: idx, y: item.fastingValue }))
-    .filter(p => p.y !== null) as { x: number; y: number }[];
+    // Grouping dictionary
+    const groups: Record<string, {
+      groupKey: string;
+      formattedLabel: string;
+      fastingValues: number[];
+      postValues: number[];
+      dates: string[];
+      notesList: string[];
+      stressLevels: number[];
+    }> = {};
 
-  const postRegPoints = filteredRawData
-    .map((item, idx) => ({ x: idx, y: item.postValue }))
-    .filter(p => p.y !== null) as { x: number; y: number }[];
+    rangeSortedReadings.forEach(r => {
+      let groupKey = "";
+      let formattedLabel = "";
 
-  const fastingReg = calculateRegression(fastingRegPoints);
-  const postReg = calculateRegression(postRegPoints);
+      if (reportAggregation === "daily") {
+        groupKey = r.date;
+        formattedLabel = r.date.substring(5); // "MM-DD"
+      } else if (reportAggregation === "weekly") {
+        const mon = getMondayStr(r.date);
+        groupKey = mon;
+        formattedLabel = `W/O ${mon.substring(5)}`; // "W/O MM-DD"
+      } else if (reportAggregation === "monthly") {
+        groupKey = r.date.substring(0, 7); // "YYYY-MM"
+        const d = new Date(groupKey + "-02T12:00:00");
+        formattedLabel = d.toLocaleDateString(undefined, { month: "short", year: "numeric" }); // "Jun 2026"
+      }
 
-  const filteredChartData = filteredRawData.map((item, idx) => ({
-    ...item,
-    fastingTrend: fastingReg ? fastingReg.slope * idx + fastingReg.intercept : null,
-    postTrend: postReg ? postReg.slope * idx + postReg.intercept : null,
-  }));
+      if (!groups[groupKey]) {
+        groups[groupKey] = {
+          groupKey,
+          formattedLabel,
+          fastingValues: [],
+          postValues: [],
+          dates: [],
+          notesList: [],
+          stressLevels: []
+        };
+      }
+
+      if (r.type === "fasting") {
+        groups[groupKey].fastingValues.push(r.value);
+      } else {
+        groups[groupKey].postValues.push(r.value);
+      }
+      if (r.notes) {
+        groups[groupKey].notesList.push(r.notes);
+      }
+      if (r.stressLevel !== undefined && r.stressLevel !== null) {
+        groups[groupKey].stressLevels.push(r.stressLevel);
+      }
+      if (!groups[groupKey].dates.includes(r.date)) {
+        groups[groupKey].dates.push(r.date);
+      }
+    });
+
+    // Convert groups to sorted list
+    const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+    return keys.map((key) => {
+      const g = groups[key];
+      const avgFasting = g.fastingValues.length > 0
+        ? Math.round(g.fastingValues.reduce((sum, v) => sum + v, 0) / g.fastingValues.length)
+        : null;
+      const avgPost = g.postValues.length > 0
+        ? Math.round(g.postValues.reduce((sum, v) => sum + v, 0) / g.postValues.length)
+        : null;
+      const avgStress = g.stressLevels.length > 0
+        ? Math.round((g.stressLevels.reduce((sum, v) => sum + v, 0) / g.stressLevels.length) * 10) / 10
+        : undefined;
+
+      return {
+        id: `agg-${reportAggregation}-${key}`,
+        date: key.length === 10 ? key : g.dates[0] || key,
+        time: "00:00",
+        formattedLabel: g.formattedLabel,
+        fastingValue: avgFasting,
+        postValue: avgPost,
+        type: (avgFasting !== null && avgPost !== null) ? "both" : (avgFasting !== null ? "fasting" : "post_fasting"),
+        value: avgFasting ?? avgPost ?? 0,
+        category: "Aggregated Average",
+        isAggregated: true,
+        rawLogsCount: g.fastingValues.length + g.postValues.length,
+        notes: g.notesList.length > 0 ? g.notesList.join("; ") : "",
+        stressLevel: avgStress,
+      };
+    });
+  }, [rangeSortedReadings, reportAggregation]);
+
+  const filteredRawData = useMemo(() => {
+    return aggregatedData.map(item => ({
+      ...item,
+      fastingValue: chartFilter === "post_fasting" ? null : item.fastingValue,
+      postValue: chartFilter === "fasting" ? null : item.postValue,
+    })).filter(item => {
+      return item.fastingValue !== null || item.postValue !== null;
+    });
+  }, [aggregatedData, chartFilter]);
+
+  const fastingRegPoints = useMemo(() => {
+    return filteredRawData
+      .map((item, idx) => ({ x: idx, y: item.fastingValue }))
+      .filter(p => p.y !== null) as { x: number; y: number }[];
+  }, [filteredRawData]);
+
+  const postRegPoints = useMemo(() => {
+    return filteredRawData
+      .map((item, idx) => ({ x: idx, y: item.postValue }))
+      .filter(p => p.y !== null) as { x: number; y: number }[];
+  }, [filteredRawData]);
+
+  const fastingReg = useMemo(() => calculateRegression(fastingRegPoints), [fastingRegPoints]);
+  const postReg = useMemo(() => calculateRegression(postRegPoints), [postRegPoints]);
+
+  const filteredChartData = useMemo(() => {
+    return filteredRawData.map((item, idx) => ({
+      ...item,
+      fastingTrend: fastingReg ? fastingReg.slope * idx + fastingReg.intercept : null,
+      postTrend: postReg ? postReg.slope * idx + postReg.intercept : null,
+    }));
+  }, [filteredRawData, fastingReg, postReg]);
+
+  // Synchronized chart brush hook across aggregation styles (Daily, Weekly, Monthly, Raw)
+  const {
+    brushRange,
+    handleBrushChange,
+    resetBrush,
+    setPreset: setBrushPreset,
+  } = useChartBrushSync(filteredChartData, reportAggregation);
 
   // Prepare data for Adherence & Glucose Correlation Chart
   const adherenceChartData = useMemo(() => {
@@ -1715,6 +2239,82 @@ export default function App() {
     }
   }
 
+  // Standardized Diabetes Metrics (TIR %, eAG, Estimated HbA1c)
+  const tirMetrics = useMemo(() => {
+    const days = parseInt(reportTimeRange) || 30;
+    const cutoffMs = benchmarkRef.getTime() - days * 24 * 60 * 60 * 1000;
+    const filteredReadings = readings.filter(r => {
+      const t = new Date(r.date + "T" + (r.time || "12:00")).getTime();
+      return t >= cutoffMs;
+    });
+
+    const total = filteredReadings.length || 1;
+    const inRange = filteredReadings.filter(r => r.value >= 70 && r.value <= 180).length;
+    const hypo = filteredReadings.filter(r => r.value < 70).length;
+    const severeHypo = filteredReadings.filter(r => r.value < 54).length;
+    const hyper = filteredReadings.filter(r => r.value > 180).length;
+    const severeHyper = filteredReadings.filter(r => r.value > 250).length;
+
+    const sum = filteredReadings.reduce((acc, r) => acc + r.value, 0);
+    const meanGlucose = Math.round(sum / total);
+    const estHbA1c = Math.round(((meanGlucose + 46.7) / 28.7) * 10) / 10;
+
+    return {
+      timeWindowDays: days,
+      totalCount: filteredReadings.length,
+      inRangePct: Math.round((inRange / total) * 100),
+      hypoPct: Math.round((hypo / total) * 100),
+      severeHypoPct: Math.round((severeHypo / total) * 100),
+      hyperPct: Math.round((hyper / total) * 100),
+      severeHyperPct: Math.round((severeHyper / total) * 100),
+      eAG: meanGlucose,
+      estimatedHbA1c: isNaN(estHbA1c) ? 5.7 : estHbA1c
+    };
+  }, [readings, reportTimeRange, benchmarkRef]);
+
+  // Account Deletion & Health Data Rights Handlers (Google Play Compliance)
+  const handleExportAllData = () => {
+    const backupData = {
+      app: "Diabetes Surveillance Platform",
+      exportedAt: new Date().toISOString(),
+      profiles,
+      activeProfile: profile,
+      readings,
+      foodLogs,
+      medLogs,
+      reminders,
+      prescribedMeds,
+      activityLogs
+    };
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `diabetes_surveillance_export_${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportFeedback("All health data exported successfully!");
+    setTimeout(() => setExportFeedback(""), 3000);
+  };
+
+  const handleDeleteAccountData = () => {
+    localStorage.clear();
+    setReadings([]);
+    setFoodLogs([]);
+    setMedLogs([]);
+    setReminders([]);
+    setPrescribedMeds([]);
+    setActivityLogs([]);
+    setProfile(DEFAULT_PROFILE);
+    setProfiles([]);
+    setActiveProfileId("");
+    alert("Account and all health data permanently wiped from device sandbox.");
+    setActiveTab("dashboard");
+  };
+
   // Calculate active Insulin-on-Board (IOB) based on 4-hour linear decay model
   const computeIOBData = () => {
     const now = new Date();
@@ -1761,6 +2361,57 @@ export default function App() {
 
   const { activeIOB, activeInjections } = computeIOBData();
 
+  const handleExportAggregatedToCSV = () => {
+    if (filteredChartData.length === 0) {
+      setExportFeedback("Error: No aggregated trend data to export.");
+      setTimeout(() => setExportFeedback(""), 5000);
+      return;
+    }
+
+    try {
+      let csvContent = "=== METABOLIC SURVEILLANCE TREND EXPORT ===\r\n";
+      csvContent += `Patient Name,${profile.name}\r\n`;
+      csvContent += `Diabetes Type,${profile.diabetesType}\r\n`;
+      csvContent += `Target Fasting Range,${profile.targetFastingMin} - ${profile.targetFastingMax} mg/dL\r\n`;
+      csvContent += `Target Post-Meal Range,${profile.targetPostMin} - ${profile.targetPostMax} mg/dL\r\n`;
+      csvContent += `Aggregation Level,${reportAggregation === "raw" ? "Individual Log" : reportAggregation.toUpperCase() + " AVERAGE"}\r\n`;
+      csvContent += `Timeframe,${reportTimeRange === "custom" ? "Custom Range" : reportTimeRange + " Days"}\r\n`;
+      csvContent += `Export Timestamp,${new Date().toLocaleString()}\r\n`;
+      csvContent += "Medical Disclaimer,All medical metrics and health guides generated here are reference summaries only. Consult your licensed physician before altering medications.\r\n\r\n";
+
+      csvContent += "Period Label,Date Representative,Fasting Glucose Avg (mg/dL),Post-Meal Glucose Avg (mg/dL),Linear Fasting Trend,Linear Post Trend,Notes\r\n";
+
+      filteredChartData.forEach(item => {
+        const fastingStr = item.fastingValue !== null ? item.fastingValue : "—";
+        const postStr = item.postValue !== null ? item.postValue : "—";
+        const fastingTrendStr = item.fastingTrend !== null ? Math.round(item.fastingTrend * 10) / 10 : "—";
+        const postTrendStr = item.postTrend !== null ? Math.round(item.postTrend * 10) / 10 : "—";
+        const notesStr = item.notes ? `"${item.notes.replace(/"/g, '""')}"` : "None";
+        csvContent += `"${item.formattedLabel}",${item.date},${fastingStr},${postStr},${fastingTrendStr},${postTrendStr},${notesStr}\r\n`;
+      });
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      
+      const safeName = profile.name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const aggLabel = reportAggregation === "raw" ? "individual" : `${reportAggregation}_avg`;
+      link.setAttribute("download", `glucose_trend_${aggLabel}_${safeName}_${new Date().toISOString().split("T")[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setExportFeedback(`Success: Compiled glucose trend CSV statement downloaded!`);
+      setTimeout(() => setExportFeedback(""), 6000);
+    } catch (err: any) {
+      console.error(err);
+      setExportFeedback(`Error exporting trend: ${err.message}`);
+      setTimeout(() => setExportFeedback(""), 6000);
+    }
+  };
+
   const handleExportToCSV = () => {
     if (readings.length === 0) {
       setExportFeedback("Error: No glucose readings recorded yet to export.");
@@ -1800,7 +2451,19 @@ export default function App() {
         csvContent += "\r\n";
       }
 
-      // 3. Glucose Readings Tabular Data
+      // 3. Detailed Prescribed Medications
+      if (prescribedMeds.length > 0) {
+        csvContent += "=== PRESCRIBED MEDICATIONS AND SCHEDULES ===\r\n";
+        csvContent += "Medication Name,Dosage,Frequency,Side Effects,Special Instructions\r\n";
+        prescribedMeds.forEach(m => {
+          const sideEffectsStr = m.sideEffects && m.sideEffects.length > 0 ? `"${m.sideEffects.join(" | ").replace(/"/g, '""')}"` : "None";
+          const instrStr = m.specialInstructions ? `"${m.specialInstructions.replace(/"/g, '""')}"` : "None";
+          csvContent += `"${m.name}","${m.dosage || "N/A"}","${m.frequency || "Once daily"}",${sideEffectsStr},${instrStr}\r\n`;
+        });
+        csvContent += "\r\n";
+      }
+
+      // 4. Glucose Readings Tabular Data
       csvContent += "=== PRIMARY GLUCOSE READINGS RECORD ===\r\n";
       csvContent += "Date,Time,Check Type,Glucose Value (mg/dL),Clinical Category,Patient Notes & Symptoms\r\n";
 
@@ -1963,24 +2626,60 @@ export default function App() {
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(11);
       doc.setTextColor(15, 23, 42);
-      doc.text("CURRENT PRESCRIBED MEDICATIONS", 15, y);
+      doc.text("CURRENT PRESCRIBED MEDICATIONS & DETAILS", 15, y);
       doc.line(15, y + 2, 195, y + 2);
       
       y += 8;
       
-      doc.setFont("Helvetica", "normal");
-      doc.setFontSize(9.5);
-      doc.setTextColor(51, 65, 85);
-      const medsList = (profile.medications || "").split(",").map(m => m.trim()).filter(Boolean);
-      if (medsList.length === 0) {
-        doc.text("No active medical prescriptions listed in profile.", 15, y);
+      if (prescribedMeds.length === 0) {
+        doc.setFont("Helvetica", "normal");
+        doc.setFontSize(9.5);
+        doc.setTextColor(115, 115, 115);
+        doc.text("No active medical prescriptions added.", 15, y);
         y += 6;
       } else {
-        medsList.forEach((med) => {
-          doc.setFillColor(13, 148, 136);
-          doc.rect(17, y - 2, 1.5, 1.5, "F");
-          doc.text(med, 22, y + 0.5);
-          y += 5.5;
+        prescribedMeds.forEach((med) => {
+          if (y > 270) {
+            doc.addPage();
+            totalPagesExp.val += 1;
+            y = 20;
+          }
+          doc.setFont("Helvetica", "bold");
+          doc.setFontSize(9.5);
+          doc.setTextColor(15, 23, 42);
+          doc.text(`${med.name} — ${med.dosage || "N/A"} (${med.frequency || "Once daily"})`, 15, y);
+          y += 4.5;
+
+          doc.setFont("Helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(71, 85, 105);
+
+          if (med.specialInstructions) {
+            const wrapInstructions = doc.splitTextToSize(`• Special Instructions: ${med.specialInstructions}`, 175);
+            wrapInstructions.forEach((line: string) => {
+              if (y > 270) {
+                doc.addPage();
+                totalPagesExp.val += 1;
+                y = 20;
+              }
+              doc.text(line, 18, y);
+              y += 4;
+            });
+          }
+
+          if (med.sideEffects && med.sideEffects.length > 0) {
+            const wrapSideEffects = doc.splitTextToSize(`• Potential Side Effects: ${med.sideEffects.join(", ")}`, 175);
+            wrapSideEffects.forEach((line: string) => {
+              if (y > 270) {
+                doc.addPage();
+                totalPagesExp.val += 1;
+                y = 20;
+              }
+              doc.text(line, 18, y);
+              y += 4;
+            });
+          }
+          y += 2.5; // padding after medication
         });
       }
 
@@ -2129,7 +2828,14 @@ export default function App() {
   };
 
   return (
-    <AndroidFrame onBackPress={handleBackNavigation} onHomePress={handleHomeNavigation}>
+    <AndroidFrame 
+      onBackPress={handleBackNavigation} 
+      onHomePress={handleHomeNavigation}
+      isFullscreen={isFullscreenAndroid}
+      onToggleFullscreen={() => setIsFullscreenAndroid(!isFullscreenAndroid)}
+      onOpenAndroidModal={() => setShowAndroidModal(true)}
+    >
+      <OfflineIndicator />
       
       {/* Dynamic Screen Contents mapping of Tab selections */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -2146,15 +2852,145 @@ export default function App() {
             </div>
           </div>
           
-          <button 
-            id="header-profile-btn"
-            onClick={() => changeTab("profile")}
-            className="flex items-center gap-2 text-xs text-stone-400 bg-neutral-800 hover:bg-neutral-700/80 px-2.5 py-1.5 rounded-xl border border-neutral-700/60 transition-all cursor-pointer"
-          >
-            <User className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-medium truncate max-w-[80px]">{profile.name.split(" ")[0]}</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <PWAInstallButton onOpenAndroidModal={() => setShowAndroidModal(true)} />
+
+            <button
+              id="header-theme-toggle-btn"
+              title="Switch Matte Palette"
+              onClick={() => {
+                const themes: ("matte-slate" | "matte-terracotta" | "matte-steel" | "matte-chalk-light")[] = [
+                  "matte-slate",
+                  "matte-terracotta",
+                  "matte-steel",
+                  "matte-chalk-light"
+                ];
+                const currentIndex = themes.indexOf(profile.theme as any);
+                const nextTheme = themes[(currentIndex + 1) % themes.length];
+                const updated = { ...profile, theme: nextTheme };
+                setProfile(updated);
+                localStorage.setItem("dia_profile", JSON.stringify(updated));
+                document.documentElement.setAttribute("data-theme", nextTheme);
+              }}
+              className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-200 bg-neutral-800/80 hover:bg-neutral-800 px-2 py-1.5 rounded-xl border border-neutral-700/60 font-mono transition-all cursor-pointer"
+            >
+              <Palette className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="hidden sm:inline capitalize">
+                {profile.theme === "matte-terracotta" ? "Terracotta" : profile.theme === "matte-steel" ? "Steel" : profile.theme === "matte-chalk-light" ? "Chalk" : "Slate"}
+              </span>
+            </button>
+
+            {/* Pro / Membership Badge & Upgrade Button */}
+            <button
+              id="header-upgrade-btn"
+              onClick={() => setShowMonetizationModal(true)}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer font-mono font-bold ${
+                profile.membershipTier === "pro"
+                  ? "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
+                  : profile.membershipTier === "caregiver_plus"
+                  ? "bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25"
+                  : "bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border-amber-500/40 hover:border-amber-400 active:scale-95"
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              <span className="hidden sm:inline">
+                {profile.membershipTier === "pro" ? "Pro Member" : profile.membershipTier === "caregiver_plus" ? "Caregiver+" : "Upgrade Pro"}
+              </span>
+            </button>
+
+            <button 
+              id="header-profile-btn"
+              onClick={() => changeTab("profile")}
+              className="flex items-center gap-2 text-xs text-stone-300 bg-neutral-800 hover:bg-neutral-750 px-2.5 py-1.5 rounded-xl border border-neutral-700/60 transition-all cursor-pointer"
+            >
+              <User className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-medium truncate max-w-[80px]">{profile.name.split(" ")[0]}</span>
+            </button>
+          </div>
         </header>
+
+        {/* TOP HORIZONTAL SCROLLABLE FEATURE NAVIGATION BAR */}
+        <div className="bg-neutral-900/90 border-b border-neutral-800 px-3 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 select-none text-[11px] font-mono">
+          <button
+            onClick={() => changeTab("dashboard")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "dashboard" ? "bg-rose-950/70 text-rose-300 border border-rose-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Glucose Tracking</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("reminders")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "reminders" ? "bg-pink-950/70 text-pink-300 border border-pink-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <Pill className="w-3.5 h-3.5" />
+            <span>Insulin & Meds</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("diet")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "diet" ? "bg-teal-950/70 text-teal-300 border border-teal-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <Utensils className="w-3.5 h-3.5" />
+            <span>Diet Planner</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("walking")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "walking" ? "bg-emerald-950/70 text-emerald-300 border border-emerald-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Walking Tracker</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("assistant")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "assistant" ? "bg-teal-950/70 text-teal-300 border border-teal-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <BrainCircuit className="w-3.5 h-3.5" />
+            <span>AI Assistant</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("reports")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "reports" ? "bg-sky-950/70 text-sky-300 border border-sky-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Doctor's Report</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("family")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "family" ? "bg-indigo-950/70 text-indigo-300 border border-indigo-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Family & WhatsApp</span>
+          </button>
+
+          <button
+            onClick={() => changeTab("handbook")}
+            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "handbook" ? "bg-purple-950/70 text-purple-300 border border-purple-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Diets Handbook</span>
+          </button>
+        </div>
 
         <AnimatePresence mode="wait">
           {/* --- SCREEN 1: DASHBOARD --- */}
@@ -2172,8 +3008,8 @@ export default function App() {
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-base font-bold text-white leading-tight">Welcome, {profile.name}</h2>
-                <p className="text-[11px] text-[#22c55e] flex items-center gap-1.5 font-mono mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-ping"></span>
+                <p className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-mono mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                   Active Diabetes Watch ({profile.diabetesType})
                 </p>
               </div>
@@ -2181,6 +3017,355 @@ export default function App() {
                 <div>Fasting: {profile.targetFastingMin}-{profile.targetFastingMax} mg/dL</div>
                 <div>Post-Meal: {profile.targetPostMin}-{profile.targetPostMax} mg/dL</div>
               </div>
+            </div>
+
+            {/* Top Dashboard Summary Row: Daily Management Status */}
+            <div 
+              id="daily-management-summary-row"
+              className={`bg-neutral-900/90 border p-3.5 rounded-2xl space-y-3 shadow-sm transition-all ${
+                complianceScore < 80 
+                  ? "border-rose-500/40 shadow-rose-950/20" 
+                  : "border-neutral-800"
+              }`}
+            >
+              {/* Row Header: Current Date and Management Status Badge */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${complianceScore < 80 ? "bg-rose-500/15 text-rose-400" : "bg-neutral-800 text-neutral-400"}`}>
+                    {complianceScore < 80 ? (
+                      <AlertTriangle className="w-4 h-4 text-rose-400 animate-pulse" />
+                    ) : (
+                      <Activity className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-xs font-bold text-white tracking-wide">Daily Management Status</h3>
+                      {complianceScore < 80 && (
+                        <span 
+                          id="compliance-warning-pill"
+                          data-testid="compliance-warning-pill"
+                          className="px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[9px] font-mono font-bold flex items-center gap-1"
+                          title="Warning: Compliance Score drops below 80% (Potential management gap)"
+                        >
+                          <AlertTriangle 
+                            id="daily-management-summary-warning-icon" 
+                            data-testid="warning-icon"
+                            className="w-2.5 h-2.5 text-rose-400 shrink-0 animate-pulse" 
+                            aria-label="Compliance Warning Icon"
+                          />
+                          <span>Warning</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-neutral-400 font-mono flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-neutral-400" />
+                      <span>{currentFormattedDate}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instant Feedback Status Pill & Warning Indicator */}
+                <div className="flex items-center gap-1.5">
+                  {complianceScore < 80 && (
+                    <div 
+                      id="compliance-gap-warning-badge"
+                      className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold flex items-center gap-1.5 bg-rose-500/15 border border-rose-500/35 text-rose-300 animate-pulse"
+                      title="Warning: Medication compliance is under 80%"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <span>Adherence Gap (&lt;80%)</span>
+                    </div>
+                  )}
+
+                  <div className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold flex items-center gap-1.5 border ${dailyStatusBadge.classes}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${dailyStatusBadge.dotClass}`}></span>
+                    <span>{dailyStatusBadge.label}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Management Gap Warning banner when Compliance Score < 80% */}
+              {complianceScore < 80 && (
+                <div 
+                  id="compliance-gap-warning-alert"
+                  className="bg-rose-950/30 border border-rose-500/30 rounded-xl px-3 py-2 flex items-center justify-between gap-2.5 text-[10.5px] text-rose-200"
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+                    <span>
+                      <strong className="text-rose-300 font-bold">Management Gap Warning:</strong> Medication compliance is {complianceScore}% (&lt;80% target). Complete pending alarms to maintain glycemic control.
+                    </span>
+                  </div>
+                  <button
+                    id="btn-resolve-compliance-warning"
+                    type="button"
+                    onClick={() => changeTab("reminders")}
+                    className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[9.5px] font-mono font-bold shrink-0 transition-all cursor-pointer"
+                  >
+                    Take Meds
+                  </button>
+                </div>
+              )}
+
+              {/* Instant Feedback KPI Cards: 'Log Count' & 'Compliance Score' */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Metric 1: Log Count */}
+                <div 
+                  id="summary-log-count-card"
+                  onClick={() => {
+                    const el = document.getElementById("btn-log-fasting") || document.getElementById("dashboard-subtab-logs");
+                    if (el) {
+                      el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                  }}
+                  className="bg-neutral-950/80 border border-neutral-800/90 hover:border-neutral-700/80 p-3 rounded-xl transition-all cursor-pointer group select-none"
+                  title="Click to jump to surveillance log entry"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-stone-400 font-semibold uppercase tracking-wider block">Log Count</span>
+                    <div className="p-1 bg-neutral-900 group-hover:bg-neutral-800 text-neutral-400 group-hover:text-cyan-400 rounded-md transition-all">
+                      <ClipboardList className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-baseline gap-1.5 mt-1.5">
+                    <span className={`text-2xl font-black font-mono ${todayLogCount > 0 ? "text-cyan-400" : "text-neutral-400"}`}>
+                      {todayLogCount}
+                    </span>
+                    <span className="text-[10.5px] text-neutral-400 font-mono">
+                      {todayLogCount === 1 ? "log today" : "logs today"}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between text-[9.5px] font-mono border-t border-neutral-900 pt-1.5">
+                    <span className="text-neutral-400 truncate">
+                      {todayLogCount === 0 
+                        ? "0 checkpoints logged" 
+                        : `${todayFastingCount} fasting · ${todayPostCount} post`}
+                    </span>
+                    <span className="text-cyan-400 group-hover:text-cyan-300 font-sans font-semibold text-[9px] shrink-0 ml-1">
+                      + Add Log
+                    </span>
+                  </div>
+                </div>
+
+                {/* Metric 2: Compliance Score */}
+                <div 
+                  id="summary-compliance-score-card"
+                  onClick={() => changeTab("reminders")}
+                  className={`border p-3 rounded-xl transition-all cursor-pointer group select-none ${
+                    complianceScore < 80
+                      ? "bg-rose-950/20 border-rose-500/35 hover:border-rose-500/50"
+                      : "bg-neutral-950/80 border-neutral-800/90 hover:border-neutral-700/80"
+                  }`}
+                  title="Click to view medication checklist & alarms"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-stone-400 font-semibold uppercase tracking-wider block">Compliance Score</span>
+                      {complianceScore < 80 && (
+                        <span 
+                          id="compliance-card-warning-icon"
+                          title="Warning: Compliance Score is below 80%"
+                          className="inline-flex items-center"
+                        >
+                          <AlertTriangle className="w-3 h-3 text-rose-400 animate-pulse shrink-0" />
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-1 bg-neutral-900 group-hover:bg-neutral-800 text-neutral-400 group-hover:text-emerald-400 rounded-md transition-all">
+                      <Pill className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-baseline gap-1.5 mt-1.5">
+                    <span className={`text-2xl font-black font-mono flex items-center gap-1 ${
+                      complianceScore === 100 
+                        ? "text-emerald-400" 
+                        : complianceScore >= 80 
+                          ? "text-cyan-400" 
+                          : "text-rose-400"
+                    }`}>
+                      {complianceScore}%
+                      {complianceScore < 80 && (
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400 animate-pulse shrink-0" />
+                      )}
+                    </span>
+                    <span className="text-[9.5px] text-neutral-400 font-mono">
+                      {activeReminders.length > 0 
+                        ? `(${completedAlarmsCount}/${activeReminders.length} alarms)` 
+                        : "(0 alarms)"}
+                    </span>
+                  </div>
+
+                  {/* Visual adherence bar & instant feedback */}
+                  <div className="mt-2 space-y-1 border-t border-neutral-900 pt-1.5">
+                    <div className="h-1.5 bg-neutral-900 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          complianceScore === 100 
+                            ? "bg-emerald-500" 
+                            : complianceScore >= 80 
+                              ? "bg-cyan-500" 
+                              : "bg-rose-500"
+                        }`}
+                        style={{ width: `${complianceScore}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] font-mono text-neutral-400">
+                      <span className="truncate">
+                        {activeReminders.length === 0
+                          ? "No alarms set"
+                          : complianceScore === 100
+                            ? "All alarms completed"
+                            : `${activeReminders.length - completedAlarmsCount} alarm${activeReminders.length - completedAlarmsCount > 1 ? "s" : ""} pending`}
+                      </span>
+                      <span className="text-neutral-400 group-hover:text-neutral-200 flex items-center gap-0.5 shrink-0 ml-1">
+                        View <ChevronRight className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* NEW SECTION: Compliance Score Analysis & Actionable Suggestions */}
+              {complianceScore < 80 ? (
+                <div 
+                  id="compliance-score-analysis-section"
+                  className="bg-neutral-950/90 border border-rose-500/30 rounded-xl p-3 space-y-2.5 animate-fadeIn"
+                >
+                  <div className="flex items-center justify-between border-b border-neutral-800/80 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-lg bg-rose-500/15 text-rose-400">
+                        <BrainCircuit className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Adherence Deficit Analysis</span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
+                            {complianceScore}% / 80% Target
+                          </span>
+                        </h4>
+                        <p className="text-[10px] text-neutral-400">
+                          {activeReminders.length === 0
+                            ? "Zero alarms active — unprogrammed regimens lead to erratic glycemic control."
+                            : `${80 - complianceScore}% below consensus safety threshold (${activeReminders.length - completedAlarmsCount} pending dose${activeReminders.length - completedAlarmsCount > 1 ? "s" : ""}).`}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-mono font-bold text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-800/40 shrink-0">
+                      Action Required
+                    </span>
+                  </div>
+
+                  {/* Clinical Impact Summary */}
+                  <p className="text-[10.5px] text-neutral-300 leading-relaxed">
+                    {activeReminders.length === 0
+                      ? "Without structured medication alerts, patients face up to 3× higher risk of fasting hyperglycemia and delayed HbA1c reduction."
+                      : complianceScore < 50
+                      ? "Critical adherence drop (<50%): Missing multiple doses directly increases glucose volatility and triggers rebound glycemic spikes."
+                      : "Adherence is below the 80% threshold. Taking doses at irregular hours disrupts glycemic stability between meals."}
+                  </p>
+
+                  {/* Specific Actionable Suggestions Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {/* Actionable Suggestion 1: Set a custom alarm */}
+                    <div className="bg-neutral-900/90 border border-neutral-800 hover:border-cyan-500/40 p-2.5 rounded-xl flex flex-col justify-between gap-2 transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-[11px]">
+                          <BellRing className="w-3.5 h-3.5 shrink-0" />
+                          <span>Set a Custom Alarm</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 leading-snug">
+                          {activeReminders.length === 0 
+                            ? "Create scheduled daily medication and insulin reminders with custom times and audio chimes."
+                            : "Add an extra scheduled alarm or adjust dose times so your medication routine matches your schedule."}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        id="btn-compliance-action-alarm"
+                        onClick={() => {
+                          changeTab("reminders");
+                          setRemindersSubTab("checklist");
+                          setNewReminderForm(true);
+                        }}
+                        className="w-full py-1.5 px-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Set a Custom Alarm</span>
+                      </button>
+                    </div>
+
+                    {/* Actionable Suggestion 2: Consult your clinic */}
+                    <div className="bg-neutral-900/90 border border-neutral-800 hover:border-purple-500/40 p-2.5 rounded-xl flex flex-col justify-between gap-2 transition-all">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-purple-400 font-bold text-[11px]">
+                          <Stethoscope className="w-3.5 h-3.5 shrink-0" />
+                          <span>Consult Your Clinic</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 leading-snug">
+                          If missed doses stem from pill burden, side effects, or schedule conflicts, request your doctor review your regimen.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          id="btn-compliance-action-clinic"
+                          onClick={() => {
+                            const subject = encodeURIComponent(`Medication Adherence Advisory - ${profile.name}`);
+                            const body = encodeURIComponent(
+                              `Hello Clinic Staff,\n\n` +
+                              `Patient: ${profile.name} (Age: ${profile.age}, ${profile.diabetesType})\n` +
+                              `Current Medication Compliance: ${complianceScore}%\n` +
+                              `Prescribed Medications: ${profile.medications || "Metformin"}\n\n` +
+                              `I would like to consult with my healthcare provider regarding my current dosing schedule and potential adjustments to improve compliance.\n\n` +
+                              `Sent via Diabetes Surveillance Platform.`
+                            );
+                            window.location.href = `mailto:${profile.doctorEmail || ""}?subject=${subject}&body=${body}`;
+                          }}
+                          className="flex-1 py-1.5 px-2 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-300 text-[10px] font-mono font-bold flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95"
+                          title="Send adherence message to clinic"
+                        >
+                          <span>Consult Clinic</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          id="btn-compliance-view-report"
+                          onClick={() => changeTab("reports")}
+                          className="py-1.5 px-2 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-neutral-300 text-[10px] font-mono font-bold transition-all cursor-pointer active:scale-95"
+                          title="Open Doctor's AGP Report"
+                        >
+                          Doctor Report
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  id="compliance-score-optimal-section"
+                  className="bg-emerald-950/20 border border-emerald-500/25 rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-[10.5px] text-emerald-300 animate-fadeIn"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>
+                      <strong className="font-bold">Target Adherence Met ({complianceScore}%):</strong> Consistent medication timing protects against glycemic surges.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => changeTab("reminders")}
+                    className="text-[9.5px] font-mono text-emerald-400 hover:text-emerald-300 underline font-bold shrink-0 cursor-pointer"
+                  >
+                    View Schedule
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Quick Metrics Bento Row */}
@@ -2214,18 +3399,78 @@ export default function App() {
               </div>
             </div>
 
-            {/* Fasting Timer & Insulin-on-Board Row */}
+            {/* Standardized Diabetes Metrics (TIR, eAG, Estimated HbA1c) Card */}
+            <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between border-b border-neutral-850 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Standardized Clinical Metrics</h3>
+                    <p className="text-[9.5px] text-neutral-400 font-mono">ADA & AGP Guideline Alignment</p>
+                  </div>
+                </div>
+
+                {/* Interval Toggles */}
+                <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800">
+                  {(["7", "14", "30", "90"] as const).map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setReportTimeRange(days as any)}
+                      className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold font-mono transition-all cursor-pointer ${
+                        reportTimeRange === days
+                          ? "bg-emerald-500 text-black shadow-sm"
+                          : "text-neutral-400 hover:text-white"
+                      }`}
+                    >
+                      {days}D
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TIR Bar Visualizer */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-[10.5px]">
+                  <span className="text-neutral-300 font-bold">Time-in-Range (70–180 mg/dL):</span>
+                  <span className="text-emerald-400 font-black text-xs font-mono">{tirMetrics.inRangePct}% TIR</span>
+                </div>
+                <div className="h-2.5 bg-neutral-950 rounded-full flex overflow-hidden p-0.5 border border-neutral-800">
+                  <div className="bg-rose-500 h-full transition-all" style={{ width: `${tirMetrics.hypoPct}%` }} title={`Hypo <70: ${tirMetrics.hypoPct}%`}></div>
+                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${tirMetrics.inRangePct}%` }} title={`Target 70-180: ${tirMetrics.inRangePct}%`}></div>
+                  <div className="bg-orange-500 h-full transition-all" style={{ width: `${tirMetrics.hyperPct}%` }} title={`Hyper >180: ${tirMetrics.hyperPct}%`}></div>
+                </div>
+                <div className="flex justify-between text-[9px] font-mono text-neutral-400 pt-0.5">
+                  <span className="text-rose-400">Low &lt;70: {tirMetrics.hypoPct}%</span>
+                  <span className="text-emerald-400">Target: {tirMetrics.inRangePct}%</span>
+                  <span className="text-orange-400">High &gt;180: {tirMetrics.hyperPct}%</span>
+                </div>
+              </div>
+
+              {/* eAG and Estimated HbA1c Metrics Grid */}
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-neutral-850">
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-neutral-800 text-center">
+                  <span className="text-[9px] text-neutral-400 uppercase tracking-wider font-mono block">Estimated Average Glucose (eAG)</span>
+                  <div className="text-base font-black text-white mt-0.5 font-mono">{tirMetrics.eAG} <span className="text-[9px] font-normal text-neutral-400">mg/dL</span></div>
+                </div>
+
+                <div className="bg-neutral-950 p-2.5 rounded-xl border border-neutral-800 text-center">
+                  <span className="text-[9px] text-neutral-400 uppercase tracking-wider font-mono block">Estimated HbA1c</span>
+                  <div className="text-base font-black text-cyan-400 mt-0.5 font-mono">{tirMetrics.estimatedHbA1c}%</div>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <FastingTimer readings={readings} />
               
               {/* Dynamic Insulin on Board (IOB) Quick-View Card */}
-              <div className="bg-gradient-to-br from-[#1e1b4b]/25 to-neutral-900 border border-indigo-900/40 p-4 rounded-2xl flex flex-col justify-between relative overflow-hidden">
-                <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl pointer-events-none"></div>
-                
+              <div className="bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl flex flex-col justify-between relative overflow-hidden">
                 <div className="space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="space-y-0.5">
-                      <span className="text-[9px] text-zinc-550 font-extrabold tracking-wider block uppercase font-mono">
+                      <span className="text-[9px] text-zinc-500 font-extrabold tracking-wider block uppercase font-mono">
                         Active Insulin Tracker
                       </span>
                       <h3 className="text-sm font-black text-white flex items-center gap-1.5">
@@ -2234,13 +3479,13 @@ export default function App() {
                       </h3>
                     </div>
                     
-                    <span className="text-[8px] bg-indigo-505/15 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded font-black font-mono uppercase tracking-widest leading-none">
+                    <span className="text-[8px] bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded font-black font-mono uppercase tracking-widest leading-none">
                       4H Linear Decay
                     </span>
                   </div>
 
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-[#22d3ee] tracking-tight">
+                    <span className="text-3xl font-black text-cyan-400 tracking-tight">
                       {activeIOB}
                     </span>
                     <span className="text-xs text-neutral-400 font-mono font-bold uppercase">Units Active</span>
@@ -2249,7 +3494,7 @@ export default function App() {
                   {activeInjections.length === 0 ? (
                     <div className="bg-black/35 p-3 rounded-xl border border-neutral-800/40 text-[10px] text-neutral-400 italic font-mono flex items-center gap-2 leading-normal">
                       <Zap className="w-4 h-4 text-zinc-500 shrink-0" />
-                      <span>Zero active insulin on board today. Re-calculate doses dynamically up to 4 hours post-administration.</span>
+                      <span>Zero active insulin on board currently based on logged history. Always consult your physician or follow your prescribed care plan.</span>
                     </div>
                   ) : (
                     <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
@@ -2268,11 +3513,11 @@ export default function App() {
                             </div>
                             <div className="flex justify-between items-center text-stone-400 font-semibold text-[8.5px]">
                               <span>Injected: {inj.initialUnits} U</span>
-                              <span className="text-[#22d3ee] font-black">{inj.remainingUnits} U remaining</span>
+                              <span className="text-cyan-400 font-black">{inj.remainingUnits} U remaining</span>
                             </div>
                             <div className="h-1 bg-neutral-800/50 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-rose-500 to-indigo-500 transition-all duration-300"
+                                className="h-full bg-cyan-500 transition-all duration-300"
                                 style={{ width: `${progressPercent}%` }}
                               ></div>
                             </div>
@@ -2286,7 +3531,7 @@ export default function App() {
                 <div className="text-[9px] text-neutral-400 font-medium pt-2 border-t border-neutral-800/60 mt-3 flex justify-between items-center leading-relaxed">
                   <span className="text-zinc-500 font-mono">Provides metabolic security monitoring</span>
                   {activeIOB > 0 && (
-                    <span className="text-amber-400 font-bold flex items-center gap-1">
+                    <span className="text-rose-400 font-bold flex items-center gap-1">
                       ⚠️ Avoid insulin stacking
                     </span>
                   )}
@@ -2294,46 +3539,95 @@ export default function App() {
               </div>
             </div>
 
+            {/* Diabetes Management Control Hub */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                id="btn-open-glucometer-sync"
+                onClick={() => setShowGlucometerModal(true)}
+                className="p-2.5 bg-gradient-to-br from-teal-950/40 to-neutral-900 border border-teal-500/30 hover:border-teal-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
+              >
+                <Bluetooth className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10.5px] font-bold text-teal-300 leading-none">Sync Meter</span>
+                <span className="text-[8.5px] text-neutral-400 font-mono">BLE / USB / NFC</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-open-goals-targets"
+                onClick={() => setShowGoalsModal(true)}
+                className="p-2.5 bg-gradient-to-br from-indigo-950/40 to-neutral-900 border border-indigo-500/30 hover:border-indigo-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
+              >
+                <Target className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10.5px] font-bold text-indigo-300 leading-none">My Goals</span>
+                <span className="text-[8.5px] text-neutral-400 font-mono">HbA1c &amp; TIR</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-open-weekly-review"
+                onClick={() => setShowWeeklyReviewModal(true)}
+                className="p-2.5 bg-gradient-to-br from-cyan-950/40 to-neutral-900 border border-cyan-500/30 hover:border-cyan-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
+              >
+                <Calendar className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="text-[10.5px] font-bold text-cyan-300 leading-none">Weekly Review</span>
+                <span className="text-[8.5px] text-neutral-400 font-mono">Trends &amp; Backup</span>
+              </button>
+            </div>
+
             {/* Dashboard Sub-Tabs Selector */}
-            <div className="grid grid-cols-3 gap-1.5 bg-neutral-900 border border-neutral-800 p-1 rounded-2xl select-none text-center">
+            <div className="grid grid-cols-4 gap-1 bg-neutral-900 border border-neutral-800 p-1 rounded-2xl select-none text-center">
               <button
                 id="btn-dash-manual-subtab"
                 type="button"
                 onClick={() => setDashboardSubTab("logs")}
-                className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
+                className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "logs"
                     ? "bg-neutral-800 text-white shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Activity className="w-3.5 h-3.5" />
-                <span>Manual Logs</span>
+                <span>Logs</span>
+              </button>
+              <button
+                id="btn-dash-correlations-subtab"
+                type="button"
+                onClick={() => setDashboardSubTab("correlations")}
+                className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
+                  dashboardSubTab === "correlations"
+                    ? "bg-amber-950/40 text-amber-300 border border-amber-500/25 shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                <span>Spikes</span>
               </button>
               <button
                 id="btn-dash-food-subtab"
                 type="button"
                 onClick={() => setDashboardSubTab("food")}
-                className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
+                className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "food"
                     ? "bg-rose-955/25 text-rose-455 border border-rose-500/10 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Utensils className="w-3.5 h-3.5" />
-                <span>Culinary & Diet</span>
+                <span>Diet</span>
               </button>
               <button
                 id="btn-dash-wearables-subtab"
                 type="button"
                 onClick={() => setDashboardSubTab("wearables")}
-                className={`py-2 px-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
+                className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "wearables"
                     ? "bg-indigo-950/45 text-indigo-455 border border-indigo-500/20 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Wifi className="w-3.5 h-3.5" />
-                <span>Open Wearables</span>
+                <span>Sensors</span>
               </button>
             </div>
 
@@ -2450,7 +3744,7 @@ export default function App() {
                     <span className="text-stone-500 font-semibold uppercase">Stress Correlation Level</span>
                     <span className={`px-2 py-0.5 rounded-full font-black text-[9px] ${
                       logStressLevel <= 3 ? "bg-emerald-500/10 text-emerald-400" :
-                      logStressLevel <= 7 ? "bg-amber-500/10 text-amber-400" :
+                      logStressLevel <= 7 ? "bg-sky-500/10 text-sky-400" :
                       "bg-rose-500/10 text-rose-400"
                     }`}>
                       {logStressLevel} / 10 ({logStressLevel <= 3 ? 'Relaxed' : logStressLevel <= 7 ? 'Moderate' : 'Stressed'})
@@ -2529,10 +3823,10 @@ export default function App() {
                 : null;
 
               return (
-                <div className="bg-gradient-to-br from-neutral-900 to-neutral-950 border border-neutral-800 p-4 rounded-2xl space-y-4 shadow-sm">
+                <div className="bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl space-y-4 shadow-none">
                   <div className="flex justify-between items-start">
                     <div className="space-y-0.5">
-                      <span className="text-[9px] text-[#22d3ee] font-extrabold tracking-wider block uppercase font-mono">
+                      <span className="text-[9px] text-cyan-400 font-extrabold tracking-wider block uppercase font-mono">
                         Active Metabolic Metrics
                       </span>
                       <h3 className="text-sm font-black text-white flex items-center gap-1.5">
@@ -2543,7 +3837,7 @@ export default function App() {
                     <span className={`text-[8px] border px-2 py-0.5 rounded font-black font-mono uppercase tracking-wider ${
                       hasTodayReadings 
                         ? "bg-emerald-550/15 text-emerald-400 border-emerald-500/20" 
-                        : "bg-amber-550/15 text-amber-400 border-amber-500/20"
+                        : "bg-neutral-800 text-neutral-400 border-neutral-700"
                     }`}>
                       {hasTodayReadings ? "TODAY" : `LAST LOGGED: ${activeSummaryDate}`}
                     </span>
@@ -2560,7 +3854,7 @@ export default function App() {
                         summaryGlucoseAvg >= 70 && summaryGlucoseAvg <= 140 
                           ? "text-emerald-400" 
                           : summaryGlucoseAvg < 70 
-                            ? "text-amber-400" 
+                            ? "text-rose-400" 
                             : "text-rose-400"
                       }`}>
                         {summaryGlucoseAvg >= 70 && summaryGlucoseAvg <= 140 ? "Stable glycemic zone" : summaryGlucoseAvg < 70 ? "Trend towards low" : "Trend towards high"}
@@ -2574,7 +3868,7 @@ export default function App() {
                           summaryTimeInRangePercent >= 70 
                             ? "text-emerald-400" 
                             : summaryTimeInRangePercent >= 50 
-                              ? "text-amber-450" 
+                              ? "text-sky-400" 
                               : "text-rose-400"
                         }`}>{summaryTimeInRangePercent}%</span>
                         <span className="text-[10px] text-neutral-500 font-mono">TIR</span>
@@ -2585,7 +3879,7 @@ export default function App() {
                             summaryTimeInRangePercent >= 70 
                               ? "bg-emerald-500" 
                               : summaryTimeInRangePercent >= 50 
-                                ? "bg-amber-500" 
+                                ? "bg-sky-500" 
                                 : "bg-rose-500"
                           }`}
                           style={{ width: `${summaryTimeInRangePercent}%` }}
@@ -2651,10 +3945,10 @@ export default function App() {
                         ></div>
                         {summaryPostAvg !== null && (
                           <div 
-                            className={`absolute top-0 bottom-0 w-2 h-2 rounded-full border border-black shadow-md ${
+                            className={`absolute top-0 bottom-0 w-2 h-2 rounded-full border border-black shadow-none ${
                               summaryPostAvg >= profile.targetPostMin && summaryPostAvg <= profile.targetPostMax
-                                ? "bg-[#22d3ee]"
-                                : "bg-rose-450"
+                                ? "bg-cyan-400"
+                                : "bg-rose-400"
                             }`}
                             style={{
                               left: `${Math.max(2, Math.min(98, ((summaryPostAvg - 60) / 160) * 100))}%`,
@@ -2726,7 +4020,7 @@ export default function App() {
                                 <span className="text-neutral-600">•</span>
                                 <span className={`font-semibold ${
                                   reading.stressLevel <= 3 ? "text-emerald-400" :
-                                  reading.stressLevel <= 7 ? "text-amber-400" :
+                                  reading.stressLevel <= 7 ? "text-sky-400" :
                                   "text-rose-400"
                                 }`}>
                                   ⚡ Stress: {reading.stressLevel}/10
@@ -2757,6 +4051,12 @@ export default function App() {
               )}
             </div>
             </>
+            ) : dashboardSubTab === "correlations" ? (
+              <LifestyleCorrelationView
+                readings={readings}
+                foodLogs={foodLogs}
+                activityLogs={activityLogs}
+              />
             ) : dashboardSubTab === "food" ? (
               <FoodLogger
                 readings={readings}
@@ -2815,11 +4115,17 @@ export default function App() {
             transition={{ duration: 0.12, ease: "easeOut" }}
             className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-neutral-950"
           >
-            
-            <div className="flex justify-between items-center pb-2 border-b border-neutral-800">
+            {/* AGP Doctor's Report Generator */}
+            <DoctorReport
+              profile={profile}
+              readings={readings}
+              onOpenMonetizationHub={() => setShowMonetizationModal(true)}
+            />
+
+            <div className="flex justify-between items-center pb-2 border-b border-neutral-800 pt-2">
               <div>
-                <h2 className="text-base font-bold text-white">Graphical Reports</h2>
-                <p className="text-xs text-neutral-400 font-mono">Visual metabolic stability tracking</p>
+                <h2 className="text-base font-bold text-white">Graphical Visualizations</h2>
+                <p className="text-xs text-neutral-400 font-mono">Visual metabolic stability & trend charts</p>
               </div>
 
               {/* Only show category filter if we are looking at trendline */}
@@ -3023,153 +4329,465 @@ export default function App() {
 
             {/* Tab 1: SURVEILLANCE TRENDLINE */}
             {reportChartType === "trend" && (
-              <div className="space-y-4 animate-fadeIn">
-                {/* CHART CONTAINER & GRAPH VIEW */}
-                <div className="bg-neutral-900 p-3 rounded-2xl border border-neutral-800 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-[10px] font-mono px-1 pb-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-neutral-400">Target Range Guideline</span>
-                      <span className="text-neutral-600">•</span>
-                      <span className="text-neutral-500">
-                        {filteredChartData.length} records in {reportTimeRange === "custom" ? "Custom Range" : `${reportTimeRange}D`} window
-                      </span>
+              <div id="trendline-surveillance-container" className="space-y-4 animate-fadeIn">
+                
+                {/* TREND CONTROLS PANEL */}
+                <div id="trendline-visual-controls" className="bg-neutral-900 border border-neutral-850 p-3.5 rounded-2xl space-y-3 shadow-md">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Aggregation interval */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-mono">Aggregation Period</span>
+                      <div className="grid grid-cols-4 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[11px]">
+                        <button
+                          id="btn-agg-raw"
+                          onClick={() => setReportAggregation("raw")}
+                          className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                            reportAggregation === "raw"
+                              ? "bg-neutral-800 text-cyan-400 border border-neutral-700"
+                              : "text-neutral-500 hover:text-neutral-300"
+                          }`}
+                        >
+                          Raw
+                        </button>
+                        <button
+                          id="btn-agg-daily"
+                          onClick={() => setReportAggregation("daily")}
+                          className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                            reportAggregation === "daily"
+                              ? "bg-neutral-800 text-cyan-400 border border-neutral-700"
+                              : "text-neutral-500 hover:text-neutral-300"
+                          }`}
+                        >
+                          Daily
+                        </button>
+                        <button
+                          id="btn-agg-weekly"
+                          onClick={() => setReportAggregation("weekly")}
+                          className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                            reportAggregation === "weekly"
+                              ? "bg-neutral-800 text-cyan-400 border border-neutral-700"
+                              : "text-neutral-500 hover:text-neutral-300"
+                          }`}
+                        >
+                          Weekly
+                        </button>
+                        <button
+                          id="btn-agg-monthly"
+                          onClick={() => setReportAggregation("monthly")}
+                          className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                            reportAggregation === "monthly"
+                              ? "bg-neutral-800 text-cyan-400 border border-neutral-700"
+                              : "text-neutral-500 hover:text-neutral-300"
+                          }`}
+                        >
+                          Monthly
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Chart style select & Trend Download */}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider font-mono">Graphical Style & Overlays</span>
+                      </div>
+                      <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                        <div className="flex-1 grid grid-cols-2 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-[11px]">
+                          <button
+                            id="btn-style-line"
+                            onClick={() => setReportChartStyle("line")}
+                            className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                              reportChartStyle === "line"
+                                ? "bg-cyan-950/40 text-cyan-400 border border-cyan-800/30"
+                                : "text-neutral-500 hover:text-neutral-300"
+                            }`}
+                          >
+                            Line Chart
+                          </button>
+                          <button
+                            id="btn-style-bar"
+                            onClick={() => setReportChartStyle("bar")}
+                            className={`py-1 rounded-lg font-bold transition-all cursor-pointer text-center ${
+                              reportChartStyle === "bar"
+                                ? "bg-rose-950/40 text-rose-400 border border-rose-800/30"
+                                : "text-neutral-500 hover:text-neutral-300"
+                            }`}
+                          >
+                            Bar Graph
+                          </button>
+                        </div>
+
+                        {/* Toggle button for Linear Regression Trendlines */}
+                        <button
+                          id="btn-toggle-regression-lines"
+                          type="button"
+                          onClick={() => {
+                            setShowRegressionLines(prev => {
+                              const next = !prev;
+                              localStorage.setItem("glucose_show_regression_lines", String(next));
+                              return next;
+                            });
+                          }}
+                          className={`px-2.5 py-1 rounded-xl border text-[11px] font-bold font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm select-none shrink-0 ${
+                            showRegressionLines
+                              ? "bg-cyan-950/50 text-cyan-300 border-cyan-700/60 shadow-cyan-950/30"
+                              : "bg-neutral-950 text-neutral-500 border-neutral-800 hover:text-neutral-300 hover:border-neutral-700"
+                          }`}
+                          title={showRegressionLines ? "Click to hide linear regression trendlines to reduce visual clutter" : "Click to show linear regression trendlines"}
+                          aria-pressed={showRegressionLines}
+                        >
+                          <TrendingUp className={`w-3.5 h-3.5 shrink-0 ${showRegressionLines ? "text-cyan-400" : "text-neutral-500"}`} />
+                          <span>{showRegressionLines ? "Trendlines: ON" : "Trendlines: OFF"}</span>
+                        </button>
+
+                        <button
+                          id="btn-export-trend-csv"
+                          onClick={handleExportAggregatedToCSV}
+                          title="Export Current Trend CSV"
+                          className="px-3 rounded-xl bg-neutral-950 border border-neutral-800 hover:bg-neutral-850 text-emerald-400 hover:text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Export Trend</span>
+                          <span className="sm:hidden">CSV</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CHART CONTAINER & GRAPH VIEW WITH INTERACTIVE ZOOM / BRUSH */}
+                <div id="trendline-chart-card" className="bg-neutral-900 p-3.5 rounded-2xl border border-neutral-800 space-y-3 shadow-md">
+                  {/* Interactive Zoom Control Header */}
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-[10px] font-mono px-1 pb-2 border-b border-neutral-800">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-white font-bold text-xs">Interactive Zoom & Brushing</span>
+                          <span className="text-neutral-600">•</span>
+                          <span className="text-neutral-400 text-[10px]">
+                            {filteredChartData.length} total entries ({reportAggregation === "raw" ? "raw logs" : `${reportAggregation} avg`})
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-neutral-500">Select or slide a time window for granular inspection</p>
+                      </div>
+                    </div>
+
+                    {/* Active Zoom Window Status & Preset Actions */}
+                    <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                      {brushRange.startIndex !== undefined && brushRange.endIndex !== undefined && (
+                        <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold text-[9px] flex items-center gap-1">
+                          <ZoomIn className="w-3 h-3 text-cyan-400" />
+                          <span>
+                            Visible: #{brushRange.startIndex + 1} - #{brushRange.endIndex + 1} ({brushRange.endIndex - brushRange.startIndex + 1} pts)
+                          </span>
+                        </span>
+                      )}
+
+                      {filteredChartData.length > 5 && (
+                        <div className="flex bg-neutral-950 p-0.5 rounded-lg border border-neutral-800">
+                          <button
+                            id="btn-zoom-preset-last7"
+                            onClick={() => setBrushPreset(7)}
+                            className="px-2 py-0.5 rounded text-[9px] text-neutral-400 hover:text-white transition-all cursor-pointer font-bold"
+                            title="Zoom to latest 7 data points"
+                          >
+                            Last 7
+                          </button>
+                          <button
+                            id="btn-zoom-preset-last15"
+                            onClick={() => setBrushPreset(15)}
+                            className="px-2 py-0.5 rounded text-[9px] text-neutral-400 hover:text-white transition-all cursor-pointer font-bold"
+                            title="Zoom to latest 15 data points"
+                          >
+                            Last 15
+                          </button>
+                        </div>
+                      )}
+
+                      {(brushRange.startIndex !== undefined || brushRange.endIndex !== undefined) && (
+                        <button
+                          id="btn-reset-trendline-zoom"
+                          onClick={resetBrush}
+                          className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 text-rose-300 hover:text-rose-200 font-bold text-[9px] flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                          title="Reset Zoom to Full Window"
+                        >
+                          <RefreshCw className="w-2.5 h-2.5" />
+                          <span>Reset Zoom</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {filteredChartData.length === 0 ? (
-                    <div className="h-56 flex flex-col items-center justify-center text-center">
+                    <div id="trendline-empty-state" className="h-56 flex flex-col items-center justify-center text-center">
                       <PlayChartPlaceholderIcon className="w-10 h-10 text-neutral-700 mb-2" />
                       <p className="text-xs text-neutral-400">Unable to display graphs yet.</p>
                       <p className="text-[10px] text-neutral-500 mt-1">Please log matching fasting vs. post-meal points first.</p>
                     </div>
                   ) : (
-                    <div key={`trendline-chart-key-${chartFilter}-${filteredChartData.length}`} className="h-56 w-full text-[10px]">
+                    <div key={`trendline-chart-key-${chartFilter}-${reportChartStyle}-${reportAggregation}-${showRegressionLines}-${filteredChartData.length}`} className="h-64 w-full text-[10px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={filteredChartData}>
-                          <defs>
-                            <linearGradient id="colorFasting" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.15}/>
-                              <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="colorPost" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#fb7185" stopOpacity={0.15}/>
-                              <stop offset="95%" stopColor="#fb7185" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                          <XAxis 
-                            dataKey="formattedLabel" 
-                            stroke="#737373" 
-                            fontSize={8} 
-                            tickLine={false}
-                          />
-                          <YAxis 
-                            stroke="#737373" 
-                            domain={[40, 260]} 
-                            fontSize={8}
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <ChartTooltip 
-                            content={<CustomChartTooltip profile={profile} />} 
-                          />
-                          <Legend verticalAlign="top" height={24} iconSize={8} iconType="circle" />
-                          
-                          {/* Standard clinical danger limits */}
-                          <ReferenceLine y={70} stroke="#3b82f6" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hypoglycemia (70)', fill: '#60a5fa', position: 'bottom', offset: 10, fontSize: 8 }} />
-                          <ReferenceLine y={250} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hyperglycemia Crisis (250)', fill: '#f87171', position: 'top', fontSize: 8 }} />
+                        {reportChartStyle === "line" ? (
+                          <AreaChart data={filteredChartData}>
+                            <defs>
+                              <linearGradient id="colorFasting" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="var(--chart-fasting, #5c8d90)" stopOpacity={0.2}/>
+                                <stop offset="95%" stopColor="var(--chart-fasting, #5c8d90)" stopOpacity={0}/>
+                              </linearGradient>
+                              <linearGradient id="colorPost" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="var(--chart-post, #b5736e)" stopOpacity={0.2}/>
+                                <stop offset="95%" stopColor="var(--chart-post, #b5736e)" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                            <XAxis 
+                              dataKey="formattedLabel" 
+                              stroke="#737373" 
+                              fontSize={8} 
+                              tickLine={false}
+                            />
+                            <YAxis 
+                              stroke="#737373" 
+                              domain={[40, 260]} 
+                              fontSize={8}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <ChartTooltip 
+                              content={<CustomChartTooltip profile={profile} />} 
+                            />
+                            <Legend verticalAlign="top" height={24} iconSize={8} iconType="circle" />
+                            
+                            {/* Standard clinical danger limits */}
+                            <ReferenceLine y={70} stroke="var(--chart-hypo, #527394)" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hypoglycemia (70)', fill: 'var(--chart-hypo, #527394)', position: 'bottom', offset: 10, fontSize: 8 }} />
+                            <ReferenceLine y={250} stroke="var(--chart-hyper, #9e5b56)" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hyperglycemia Crisis (250)', fill: 'var(--chart-hyper, #9e5b56)', position: 'top', fontSize: 8 }} />
 
-                          {/* Persistent Average Reference Lines */}
-                          {windowAvgFasting !== null && chartFilter !== "post_fasting" && (
-                            <ReferenceLine 
-                              y={windowAvgFasting} 
-                              stroke="#06b6d4" 
-                              strokeDasharray="4 4" 
-                              strokeWidth={1.5} 
-                              label={{ 
-                                value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Fasting: ${windowAvgFasting} mg/dL`, 
-                                fill: '#22d3ee', 
-                                position: 'insideBottomLeft', 
-                                offset: 12, 
-                                fontSize: 8,
-                                fontWeight: 'bold'
-                              }} 
-                            />
-                          )}
-                          {windowAvgPost !== null && chartFilter !== "fasting" && (
-                            <ReferenceLine 
-                              y={windowAvgPost} 
-                              stroke="#f43f5e" 
-                              strokeDasharray="4 4" 
-                              strokeWidth={1.5} 
-                              label={{ 
-                                value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Post: ${windowAvgPost} mg/dL`, 
-                                fill: '#fb7185', 
-                                position: 'insideTopLeft', 
-                                offset: 12, 
-                                fontSize: 8,
-                                fontWeight: 'bold'
-                              }} 
-                            />
-                          )}
-                          
-                          {chartFilter !== "post_fasting" && (
-                            <Area 
-                              type="monotone" 
-                              dataKey="fastingValue" 
-                              stroke="#22d3ee" 
-                              strokeWidth={2}
-                              fillOpacity={1} 
-                              fill="url(#colorFasting)"
-                              name="Fasting"
-                              connectNulls
-                              isAnimationActive={true}
-                              animationDuration={800}
-                              animationEasing="ease-in-out"
-                            />
-                          )}
-                          {chartFilter !== "fasting" && (
-                            <Area 
-                              type="monotone" 
-                              dataKey="postValue" 
-                              stroke="#fb7185" 
-                              strokeWidth={2}
-                              fillOpacity={1} 
-                              fill="url(#colorPost)"
-                              name="Post-Fasting"
-                              connectNulls
-                              isAnimationActive={true}
-                              animationDuration={800}
-                              animationEasing="ease-in-out"
-                            />
-                          )}
+                            {/* Persistent Average Reference Lines */}
+                            {windowAvgFasting !== null && chartFilter !== "post_fasting" && (
+                              <ReferenceLine 
+                                y={windowAvgFasting} 
+                                stroke="var(--chart-fasting-border, #4a777a)" 
+                                strokeDasharray="4 4" 
+                                strokeWidth={1.5} 
+                                label={{ 
+                                  value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Fasting: ${windowAvgFasting} mg/dL`, 
+                                  fill: 'var(--chart-fasting, #5c8d90)', 
+                                  position: 'insideBottomLeft', 
+                                  offset: 12, 
+                                  fontSize: 8,
+                                  fontWeight: 'bold'
+                                }} 
+                              />
+                            )}
+                            {windowAvgPost !== null && chartFilter !== "fasting" && (
+                              <ReferenceLine 
+                                y={windowAvgPost} 
+                                stroke="var(--chart-post-border, #9e5b56)" 
+                                strokeDasharray="4 4" 
+                                strokeWidth={1.5} 
+                                label={{ 
+                                  value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Post: ${windowAvgPost} mg/dL`, 
+                                  fill: 'var(--chart-post, #b5736e)', 
+                                  position: 'insideTopLeft', 
+                                  offset: 12, 
+                                  fontSize: 8,
+                                  fontWeight: 'bold'
+                                }} 
+                              />
+                            )}
+                            
+                            {chartFilter !== "post_fasting" && (
+                              <Area 
+                                type="monotone" 
+                                dataKey="fastingValue" 
+                                stroke="var(--chart-fasting, #5c8d90)" 
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorFasting)"
+                                name="Fasting"
+                                connectNulls
+                                isAnimationActive={true}
+                                animationDuration={800}
+                                animationEasing="ease-in-out"
+                              />
+                            )}
+                            {chartFilter !== "fasting" && (
+                              <Area 
+                                type="monotone" 
+                                dataKey="postValue" 
+                                stroke="var(--chart-post, #b5736e)" 
+                                strokeWidth={2}
+                                fillOpacity={1} 
+                                fill="url(#colorPost)"
+                                name="Post-Fasting"
+                                connectNulls
+                                isAnimationActive={true}
+                                animationDuration={800}
+                                animationEasing="ease-in-out"
+                              />
+                            )}
 
-                          {/* Linear Regression Trendlines */}
-                          {chartFilter !== "post_fasting" && fastingReg && (
-                            <Line 
-                              type="linear" 
-                              dataKey="fastingTrend" 
-                              stroke="#22d3ee" 
-                              strokeWidth={2}
-                              strokeDasharray="4 4"
-                              dot={false}
-                              activeDot={false}
-                              name="Fasting Trend"
+                            {/* Linear Regression Trendlines */}
+                            {showRegressionLines && chartFilter !== "post_fasting" && fastingReg && (
+                              <Line 
+                                type="linear" 
+                                dataKey="fastingTrend" 
+                                stroke="var(--chart-fasting, #5c8d90)" 
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={false}
+                                name="Fasting Trend"
+                              />
+                            )}
+                            {showRegressionLines && chartFilter !== "fasting" && postReg && (
+                              <Line 
+                                type="linear" 
+                                dataKey="postTrend" 
+                                stroke="var(--chart-post, #b5736e)" 
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={false}
+                                name="Post-Meal Trend"
+                              />
+                            )}
+
+                            {/* Interactive Zooming / Brushing Bar */}
+                            <Brush
+                              dataKey="formattedLabel"
+                              height={28}
+                              stroke="var(--chart-brush-stroke, #4a777a)"
+                              fill="var(--chart-brush-fill, #13161a)"
+                              travellerWidth={10}
+                              startIndex={brushRange.startIndex}
+                              endIndex={brushRange.endIndex}
+                              onChange={handleBrushChange}
+                              tickFormatter={(val) => val}
                             />
-                          )}
-                          {chartFilter !== "fasting" && postReg && (
-                            <Line 
-                              type="linear" 
-                              dataKey="postTrend" 
-                              stroke="#fb7185" 
-                              strokeWidth={2}
-                              strokeDasharray="4 4"
-                              dot={false}
-                              activeDot={false}
-                              name="Post-Meal Trend"
+                          </AreaChart>
+                        ) : (
+                          <BarChart data={filteredChartData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                            <XAxis 
+                              dataKey="formattedLabel" 
+                              stroke="#737373" 
+                              fontSize={8} 
+                              tickLine={false}
                             />
-                          )}
-                        </AreaChart>
+                            <YAxis 
+                              stroke="#737373" 
+                              domain={[40, 260]} 
+                              fontSize={8}
+                              tickLine={false}
+                              axisLine={false}
+                            />
+                            <ChartTooltip 
+                              content={<CustomChartTooltip profile={profile} />} 
+                            />
+                            <Legend verticalAlign="top" height={24} iconSize={8} iconType="circle" />
+                            
+                            {/* Standard clinical danger limits */}
+                            <ReferenceLine y={70} stroke="var(--chart-hypo, #527394)" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hypoglycemia (70)', fill: 'var(--chart-hypo, #527394)', position: 'bottom', offset: 10, fontSize: 8 }} />
+                            <ReferenceLine y={250} stroke="var(--chart-hyper, #9e5b56)" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Hyperglycemia Crisis (250)', fill: 'var(--chart-hyper, #9e5b56)', position: 'top', fontSize: 8 }} />
+
+                            {/* Persistent Average Reference Lines */}
+                            {windowAvgFasting !== null && chartFilter !== "post_fasting" && (
+                              <ReferenceLine 
+                                y={windowAvgFasting} 
+                                stroke="var(--chart-fasting-border, #4a777a)" 
+                                strokeDasharray="4 4" 
+                                strokeWidth={1.5} 
+                                label={{ 
+                                  value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Fasting: ${windowAvgFasting} mg/dL`, 
+                                  fill: 'var(--chart-fasting, #5c8d90)', 
+                                  position: 'insideBottomLeft', 
+                                  offset: 12, 
+                                  fontSize: 8,
+                                  fontWeight: 'bold'
+                                }} 
+                              />
+                            )}
+                            {windowAvgPost !== null && chartFilter !== "fasting" && (
+                              <ReferenceLine 
+                                y={windowAvgPost} 
+                                stroke="var(--chart-post-border, #9e5b56)" 
+                                strokeDasharray="4 4" 
+                                strokeWidth={1.5} 
+                                label={{ 
+                                  value: `${reportTimeRange === "custom" ? "Selected" : `${reportTimeRange}D`} Avg Post: ${windowAvgPost} mg/dL`, 
+                                  fill: 'var(--chart-post, #b5736e)', 
+                                  position: 'insideTopLeft', 
+                                  offset: 12, 
+                                  fontSize: 8,
+                                  fontWeight: 'bold'
+                                }} 
+                              />
+                            )}
+                            
+                            {chartFilter !== "post_fasting" && (
+                              <Bar 
+                                dataKey="fastingValue" 
+                                fill="var(--chart-fasting, #5c8d90)" 
+                                name="Fasting"
+                                radius={[2, 2, 0, 0]}
+                                isAnimationActive={true}
+                                animationDuration={800}
+                              />
+                            )}
+                            {chartFilter !== "fasting" && (
+                              <Bar 
+                                dataKey="postValue" 
+                                fill="var(--chart-post, #b5736e)" 
+                                name="Post-Fasting"
+                                radius={[2, 2, 0, 0]}
+                                isAnimationActive={true}
+                                animationDuration={800}
+                              />
+                            )}
+
+                            {/* Linear Regression Trendlines can overlay on bars beautifully */}
+                            {showRegressionLines && chartFilter !== "post_fasting" && fastingReg && (
+                              <Line 
+                                type="linear" 
+                                dataKey="fastingTrend" 
+                                stroke="var(--chart-fasting, #5c8d90)" 
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={false}
+                                name="Fasting Trend"
+                              />
+                            )}
+                            {showRegressionLines && chartFilter !== "fasting" && postReg && (
+                              <Line 
+                                type="linear" 
+                                dataKey="postTrend" 
+                                stroke="var(--chart-post, #b5736e)" 
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={false}
+                                name="Post-Meal Trend"
+                              />
+                            )}
+
+                            {/* Interactive Zooming / Brushing Bar */}
+                            <Brush
+                              dataKey="formattedLabel"
+                              height={28}
+                              stroke="var(--chart-brush-stroke, #4a777a)"
+                              fill="var(--chart-brush-fill, #13161a)"
+                              travellerWidth={10}
+                              startIndex={brushRange.startIndex}
+                              endIndex={brushRange.endIndex}
+                              onChange={handleBrushChange}
+                              tickFormatter={(val) => val}
+                            />
+                          </BarChart>
+                        )}
                       </ResponsiveContainer>
                     </div>
                   )}
@@ -3300,7 +4918,7 @@ export default function App() {
                                 statusBg = "bg-rose-500/15 text-rose-400 border border-rose-500/20 font-bold";
                               } else if (item.avgGlucose > 120) {
                                 statusText = "Moderate";
-                                statusBg = "bg-amber-500/15 text-amber-400 border border-amber-500/20";
+                                statusBg = "bg-sky-500/15 text-sky-400 border border-sky-500/20";
                               }
                             } else {
                               statusText = "Pending data";
@@ -3437,7 +5055,7 @@ export default function App() {
                     <span className={`font-bold text-sm ${
                       latestWindowCount <= 1 
                         ? "text-neutral-500" 
-                        : (latestCV < 36 ? "text-emerald-400" : "text-amber-400")
+                        : (latestCV < 36 ? "text-emerald-400" : "text-rose-400")
                     }`}>
                       {latestWindowCount <= 1 
                         ? "Awaiting Data Base" 
@@ -3470,8 +5088,8 @@ export default function App() {
                         <AreaChart data={variabilityData}>
                           <defs>
                             <linearGradient id="colorVariability" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2}/>
-                              <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                              <stop offset="5%" stopColor="var(--color-purple-400, #85789b)" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="var(--color-purple-400, #85789b)" stopOpacity={0}/>
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
@@ -3496,16 +5114,16 @@ export default function App() {
                           {/* ADA clinical baseline safety limit of 36% CV */}
                           <ReferenceLine 
                             y={36} 
-                            stroke="#f59e0b" 
+                            stroke="var(--chart-post-border, #9e5b56)" 
                             strokeDasharray="4 4" 
                             strokeWidth={1.5} 
-                            label={{ value: 'Stability Limit (36%)', fill: '#f59e0b', position: 'top', fontSize: 8 }} 
+                            label={{ value: 'Stability Limit (36%)', fill: 'var(--chart-post-border, #9e5b56)', position: 'top', fontSize: 8 }} 
                           />
                           
                           <Area 
                             type="monotone" 
                             dataKey="cv" 
-                            stroke="#a855f7" 
+                            stroke="var(--color-purple-400, #85789b)" 
                             strokeWidth={2}
                             fillOpacity={1} 
                             fill="url(#colorVariability)"
@@ -3579,8 +5197,8 @@ export default function App() {
                   </div>
 
                   {/* Warning Medical Disclaimer */}
-                  <div className="text-[9px] text-stone-400 italic bg-black/40 p-2.5 rounded-lg border-l-2 border-amber-500 leading-relaxed">
-                    <span className="font-bold text-amber-400">Important Medical Disclaimer:</span> {insights.disclaimer || "All medical metrics and health guides generated here are reference summaries only. Always review and cross-validate diagnostic plans directly with your licensed physician before altering medications or insulin schedules."}
+                  <div className="text-[9px] text-stone-400 italic bg-black/40 p-2.5 rounded-lg border-l-2 border-rose-500 leading-relaxed">
+                    <span className="font-bold text-rose-400">Important Medical Disclaimer:</span> {insights.disclaimer || "All medical metrics and health guides generated here are reference summaries only. Always review and cross-validate diagnostic plans directly with your licensed physician before altering medications or insulin schedules."}
                   </div>
 
                   {/* Trends summary */}
@@ -3709,19 +5327,19 @@ export default function App() {
                                 domain={['auto', 'auto']} 
                                 stroke="#f43f5e" 
                                 tickLine={false}
-                                tick={{ fill: "#f43f5e", fontSize: 10 }}
+                                tick={{ fill: "var(--chart-post, #b5736e)", fontSize: 10 }}
                               />
                               <YAxis 
                                 yAxisId="right" 
                                 orientation="right" 
                                 domain={['auto', 'auto']} 
-                                stroke="#22d3ee" 
+                                stroke="var(--chart-fasting, #5c8d90)" 
                                 tickLine={false}
-                                tick={{ fill: "#22d3ee", fontSize: 10 }}
+                                tick={{ fill: "var(--chart-fasting, #5c8d90)", fontSize: 10 }}
                               />
                               <ChartTooltip
                                 contentStyle={{
-                                  backgroundColor: "#0a0a0a",
+                                  backgroundColor: "#13161a",
                                   border: "1px solid #262626",
                                   borderRadius: "12px",
                                   fontSize: "11px",
@@ -3734,21 +5352,21 @@ export default function App() {
                                 yAxisId="left"
                                 type="monotone"
                                 dataKey="weight"
-                                stroke="#f43f5e"
+                                stroke="var(--chart-post, #b5736e)"
                                 strokeWidth={2.5}
                                 activeDot={{ r: 6 }}
-                                dot={{ fill: "#f43f5e", r: 4 }}
+                                dot={{ fill: "var(--chart-post, #b5736e)", r: 4 }}
                                 name="Weight (kg)"
                               />
                               <Line
                                 yAxisId="right"
                                 type="monotone"
                                 dataKey="avgGlucose"
-                                stroke="#22d3ee"
+                                stroke="var(--chart-fasting, #5c8d90)"
                                 strokeWidth={2.5}
                                 connectNulls={true}
                                 activeDot={{ r: 6 }}
-                                dot={{ fill: "#22d3ee", r: 4 }}
+                                dot={{ fill: "var(--chart-fasting, #5c8d90)", r: 4 }}
                                 name="Glucose (mg/dL)"
                               />
                             </LineChart>
@@ -3770,7 +5388,7 @@ export default function App() {
                                 const diff = Math.round((currentWeight - initialWeight) * 10) / 10;
                                 return (
                                   <p className="text-white font-sans">
-                                    Your weight changed from <span className="text-rose-400 font-bold">{initialWeight} kg</span> to <span className="text-rose-400 font-bold">{currentWeight} kg</span> (<span className={`font-bold ${diff <= 0 ? "text-emerald-400" : "text-amber-400"}`}>{diff > 0 ? `+${diff}` : diff} kg</span>) over this reporting interval.
+                                    Your weight changed from <span className="text-rose-400 font-bold">{initialWeight} kg</span> to <span className="text-rose-400 font-bold">{currentWeight} kg</span> (<span className={`font-bold ${diff <= 0 ? "text-emerald-400" : "text-rose-400"}`}>{diff > 0 ? `+${diff}` : diff} kg</span>) over this reporting interval.
                                   </p>
                                 );
                               })() : <p className="text-neutral-400 font-sans">Continuous logs needed to compute trajectory.</p>}
@@ -3890,25 +5508,25 @@ export default function App() {
                             <YAxis 
                               yAxisId="left" 
                               domain={[40, 240]} 
-                              stroke="#22d3ee" 
+                              stroke="var(--chart-fasting, #5c8d90)" 
                               tickLine={false}
-                              tick={{ fill: "#22d3ee", fontSize: 9 }}
+                              tick={{ fill: "var(--chart-fasting, #5c8d90)", fontSize: 9 }}
                             />
                             <YAxis 
                               yAxisId="right" 
                               orientation="right" 
                               domain={[0, 100]} 
-                              stroke="#14b8a6" 
+                              stroke="var(--chart-hypo, #527394)" 
                               tickLine={false}
-                              tick={{ fill: "#14b8a6", fontSize: 9 }}
+                              tick={{ fill: "var(--chart-hypo, #527394)", fontSize: 9 }}
                             />
                             <ChartTooltip
                               content={({ active, payload }: any) => {
                                 if (active && payload && payload.length) {
                                   const data = payload[0].payload;
                                   return (
-                                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-[11px] font-mono space-y-2 shadow-2xl max-w-[240px]">
-                                      <p className="font-bold text-white border-b border-neutral-850 pb-1">Date: {data.date}</p>
+                                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800 text-[11px] font-mono space-y-2 shadow-none max-w-[240px]">
+                                      <p className="font-bold text-white border-b border-neutral-800 pb-1">Date: {data.date}</p>
                                       <p className="text-cyan-400">
                                         Fasting Glucose: <strong className="font-black text-white">{data.avgFasting !== null ? `${data.avgFasting} mg/dL` : "—"}</strong>
                                       </p>
@@ -3933,14 +5551,14 @@ export default function App() {
                             />
                             {/* Standard Target Range baseline */}
                             <ReferenceLine 
-                              yAxisId="left"
+                              yAxisId="left" 
                               y={profile.targetFastingMax || 100} 
-                              stroke="#22d3ee" 
+                              stroke="var(--chart-fasting, #5c8d90)" 
                               strokeDasharray="3 3" 
                               strokeWidth={1} 
                               label={{ 
                                 value: `Target Fasting Ceiling (${profile.targetFastingMax || 100})`, 
-                                fill: '#22d3ee', 
+                                fill: 'var(--chart-fasting, #5c8d90)', 
                                 position: 'insideTopLeft', 
                                 fontSize: 8,
                                 opacity: 0.7
@@ -3951,9 +5569,9 @@ export default function App() {
                             <Bar
                               yAxisId="right"
                               dataKey="adherenceRate"
-                              fill="#14b8a6"
-                              fillOpacity={0.25}
-                              stroke="#14b8a6"
+                              fill="var(--chart-hypo, #527394)"
+                              fillOpacity={0.4}
+                              stroke="var(--chart-hypo, #527394)"
                               strokeWidth={1.5}
                               radius={[4, 4, 0, 0]}
                               name="Adherence Rate (%)"
@@ -3964,11 +5582,11 @@ export default function App() {
                               yAxisId="left"
                               type="monotone"
                               dataKey="avgFasting"
-                              stroke="#22d3ee"
+                              stroke="var(--chart-fasting, #5c8d90)"
                               strokeWidth={2.5}
                               connectNulls={true}
                               activeDot={{ r: 6 }}
-                              dot={{ fill: "#22d3ee", r: 4 }}
+                              dot={{ fill: "var(--chart-fasting, #5c8d90)", r: 4 }}
                               name="Fasting Glucose"
                             />
                           </ComposedChart>
@@ -4159,6 +5777,23 @@ export default function App() {
                   <Plus className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Add Pill</span>
                 </button>
+              ) : remindersSubTab === "fasting" ? (
+                <button
+                  id="btn-test-fasting-header"
+                  onClick={() => {
+                    if (fastingReminderConfig.soundEnabled) playNotificationChime();
+                    if (fastingReminderConfig.vibrationEnabled) triggerHaptic([200, 100, 200, 100, 300]);
+                    const { formattedTarget } = calculatePreAlertTime(fastingReminderConfig.targetTime, fastingReminderConfig.leadMinutes);
+                    sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
+                      body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`
+                    });
+                    setShowFastingAlertModal(true);
+                  }}
+                  className="bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Test Pre-Alert</span>
+                </button>
               ) : remindersSubTab === "prescriptions" ? (
                 <button
                   id="btn-open-pres-med-form"
@@ -4172,11 +5807,11 @@ export default function App() {
             </div>
 
             {/* Sub-tab Toggles */}
-            <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-neutral-800 mt-1">
+            <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-neutral-800 mt-1 overflow-x-auto">
               <button
                 id="sub-tab-checklist"
                 onClick={() => setRemindersSubTab("checklist")}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                   remindersSubTab === "checklist"
                     ? "bg-cyan-600 text-white shadow-md"
                     : "text-neutral-400 hover:text-neutral-200"
@@ -4186,9 +5821,24 @@ export default function App() {
                 <span>Daily Checklist</span>
               </button>
               <button
+                id="sub-tab-fasting"
+                onClick={() => setRemindersSubTab("fasting")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  remindersSubTab === "fasting"
+                    ? "bg-amber-600 text-white shadow-md"
+                    : "text-amber-300/80 hover:text-amber-200 hover:bg-amber-950/30"
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>🌅 Fasting Alert (15m)</span>
+                {fastingReminderConfig.enabled && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                )}
+              </button>
+              <button
                 id="sub-tab-prescriptions"
                 onClick={() => setRemindersSubTab("prescriptions")}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                   remindersSubTab === "prescriptions"
                     ? "bg-cyan-600 text-white shadow-md"
                     : "text-neutral-400 hover:text-neutral-200"
@@ -4200,7 +5850,7 @@ export default function App() {
               <button
                 id="sub-tab-checker"
                 onClick={() => setRemindersSubTab("checker")}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                   remindersSubTab === "checker"
                     ? "bg-cyan-600 text-white shadow-md"
                     : "text-neutral-400 hover:text-neutral-200"
@@ -4213,6 +5863,104 @@ export default function App() {
 
             {remindersSubTab === "checklist" && (
               <div className="space-y-4 animate-fadeIn">
+                {/* 15-MINUTE ADVANCE FASTING GLUCOSE PRE-CHECK BENTO CARD */}
+                {(() => {
+                  const { formattedTarget, formattedAlert } = calculatePreAlertTime(
+                    fastingReminderConfig.targetTime,
+                    fastingReminderConfig.leadMinutes
+                  );
+                  const todaysFasting = readings.find(
+                    (r) => r.type === "fasting" && r.date === currentStamp
+                  );
+
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-neutral-900 to-neutral-950 border border-amber-500/35 space-y-2.5 shadow-md">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5">
+                          <span className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 mt-0.5">
+                            <Sun className="w-4 h-4" />
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white">
+                                Morning Fasting Glucose Pre-Check
+                              </span>
+                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold uppercase">
+                                15m Lead
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-neutral-300 font-mono mt-0.5">
+                              Scheduled: <strong className="text-white font-bold">{formattedTarget}</strong> • 🔔 Advance Alert: <strong className="text-amber-300 font-bold">{formattedAlert}</strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          id="btn-fasting-toggle-card"
+                          onClick={() =>
+                            handleUpdateFastingConfig({
+                              ...fastingReminderConfig,
+                              enabled: !fastingReminderConfig.enabled
+                            })
+                          }
+                          className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                            fastingReminderConfig.enabled
+                              ? "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                              : "bg-neutral-800 text-neutral-500 border-neutral-700"
+                          }`}
+                        >
+                          {fastingReminderConfig.enabled ? "Active" : "Disabled"}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-neutral-800/80 text-[10.5px]">
+                        <div className="flex items-center gap-1.5 text-neutral-300">
+                          {todaysFasting ? (
+                            <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Fasting Logged Today ({todaysFasting.value} mg/dL at {todaysFasting.time})
+                            </span>
+                          ) : (
+                            <span className="text-amber-400 flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              Pending today's morning fasting check
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            id="btn-test-alert-quick"
+                            onClick={() => {
+                              if (fastingReminderConfig.soundEnabled) playNotificationChime();
+                              if (fastingReminderConfig.vibrationEnabled) triggerHaptic([200, 100, 200, 100, 300]);
+                              sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
+                                body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`
+                              });
+                              setShowFastingAlertModal(true);
+                            }}
+                            className="text-[10px] font-bold text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Zap className="w-3 h-3 text-amber-400" />
+                            <span>Test Alert</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            id="btn-goto-fasting-settings"
+                            onClick={() => setRemindersSubTab("fasting")}
+                            className="text-[10px] font-bold text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Settings</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* EXPANDABLE NEW REMINDER INPUT FORM */}
                 {newReminderForm && (
                   <form onSubmit={handleAddReminder} className="bg-neutral-900 p-4 rounded-2xl border border-neutral-800 space-y-3.5 text-xs">
@@ -4346,6 +6094,40 @@ export default function App() {
                     <span className="text-[10px] text-neutral-400 font-mono">Today's Slate</span>
                   </div>
 
+                  {(() => {
+                    const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+                    const missedOrPendingDoses = activeReminders.filter(r => {
+                      const isTaken = medLogs.some(l => l.dateStamp === currentStamp && l.reminderId === r.id);
+                      if (isTaken) return false;
+                      const timeStr = r.times[0] || "08:00";
+                      const [h, m] = timeStr.split(":").map(Number);
+                      const alarmMinutes = (h || 0) * 60 + (m || 0);
+                      return nowMinutes >= alarmMinutes;
+                    });
+
+                    if (missedOrPendingDoses.length === 0) return null;
+
+                    return (
+                      <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-xl flex items-start gap-2.5 text-xs animate-fadeIn">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-amber-300 block text-[11.5px]">
+                            {missedOrPendingDoses.length} Scheduled Dose{missedOrPendingDoses.length > 1 ? "s" : ""} Due or Past Due
+                          </span>
+                          <p className="text-[10.5px] text-neutral-300 mt-0.5 leading-snug">
+                            Safe care alert: Verify dose and time before taking to avoid double or missed doses:{" "}
+                            {missedOrPendingDoses.map((d, i) => (
+                              <span key={d.id} className="font-bold text-white">
+                                {d.name} ({d.dosage} at {d.times[0]}){i < missedOrPendingDoses.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                            . Tap to confirm administration.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {activeReminders.length === 0 ? (
                     <p className="text-[11px] text-neutral-400 italic leading-snug">
                       No active medication checklist setup. Configure reminder alarms below.
@@ -4427,7 +6209,7 @@ export default function App() {
                                   {/* Insulin Units Adjuster */}
                                   {reminder.isInsulin && !takenToday && (
                                     <div className="flex items-center gap-1.5 mt-1.5 bg-neutral-900 border border-neutral-800/80 p-1 px-2 rounded-lg self-start max-w-fit">
-                                      <span className="text-[9px] text-[#22d3ee] font-mono font-bold uppercase tracking-wider">Log Dose:</span>
+                                      <span className="text-[9px] text-cyan-400 font-mono font-bold uppercase tracking-wider">Log Dose:</span>
                                       <button
                                         type="button"
                                         id={`btn-ins-dec-${reminder.id}`}
@@ -4477,7 +6259,7 @@ export default function App() {
                                     Taken Today
                                   </span>
                                 ) : (
-                                  <span className="text-amber-500 uppercase tracking-wider bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/15">
+                                  <span className="text-neutral-400 uppercase tracking-wider bg-neutral-800 px-2 py-0.5 rounded-md border border-neutral-700">
                                     Pending
                                   </span>
                                 )}
@@ -4520,8 +6302,8 @@ export default function App() {
                                 <div><span className="font-semibold text-neutral-300">Frequency:</span> <span className="text-cyan-400 font-medium">{reminder.frequency}</span></div>
                               )}
                               {reminder.notes && (
-                                <p className="text-[10px] text-[#22d3ee]/80 italic mt-1.5 flex items-start gap-1">
-                                  <Info className="w-3.5 h-3.5 text-[#22d3ee] shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-cyan-400/80 italic mt-1.5 flex items-start gap-1">
+                                  <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
                                   <span>{reminder.notes}</span>
                                 </p>
                               )}
@@ -4558,12 +6340,24 @@ export default function App() {
               </div>
             )}
 
+            {remindersSubTab === "fasting" && (
+              <FastingGlucoseReminder
+                config={fastingReminderConfig}
+                onUpdateConfig={handleUpdateFastingConfig}
+                todayReadings={readings.filter((r) => r.date === currentStamp)}
+                onOpenLogFasting={handleLogFastingFromReminder}
+                onSimulateAlert={() => setShowFastingAlertModal(true)}
+              />
+            )}
+
             {remindersSubTab === "prescriptions" && (
               <div className="space-y-4 animate-fadeIn">
                 {/* EXPANDABLE NEW PRESCRIBED MEDICATION FORM */}
                 {newPresMedForm && (
                   <form onSubmit={handleAddPrescribedMed} className="bg-neutral-900 p-4 rounded-2xl border border-neutral-850 space-y-3.5 text-xs animate-fadeIn">
-                    <span className="font-bold text-neutral-300 tracking-wider uppercase text-[10px] block text-emerald-400 font-mono">Add Prescribed Medication</span>
+                    <span className="font-bold text-neutral-300 tracking-wider uppercase text-[10px] block text-emerald-400 font-mono">
+                      {editingPresMedId ? "Edit Prescribed Medication Details" : "Add Prescribed Medication"}
+                    </span>
                     
                     <div className="space-y-3">
                       <div>
@@ -4657,63 +6451,74 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Sync to alarms option */}
-                      <div className="bg-neutral-950/60 p-3 rounded-xl border border-neutral-850 space-y-2.5 mt-1">
-                        <div className="flex items-center gap-2">
-                          <input
-                            id="pres-med-sync-alarm"
-                            type="checkbox"
-                            checked={presMedAddAlarm}
-                            onChange={(e) => setPresMedAddAlarm(e.target.checked)}
-                            className="w-4 h-4 rounded bg-neutral-950 border-neutral-700 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
-                          />
-                          <label htmlFor="pres-med-sync-alarm" className="text-neutral-300 font-bold select-none cursor-pointer text-[11px]">
-                            Also synchronize an alarm reminder on Daily Checklist
-                          </label>
-                        </div>
-
-                        {presMedAddAlarm && (
-                          <div className="grid grid-cols-2 gap-3 pl-6 pt-1 animate-fadeIn border-l border-neutral-800">
-                            <div>
-                              <label className="block text-[10px] text-neutral-400 mb-1 font-mono">Timing Relation</label>
-                              <select
-                                id="pres-med-alarm-timing"
-                                value={presMedAlarmTiming}
-                                onChange={(e) => setPresMedAlarmTiming(e.target.value as any)}
-                                className="w-full bg-neutral-950 border border-neutral-750 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none"
-                              >
-                                <option value="before_breakfast">Before Breakfast</option>
-                                <option value="after_breakfast">After Breakfast</option>
-                                <option value="before_lunch">Before Lunch</option>
-                                <option value="after_lunch">After Lunch</option>
-                                <option value="before_dinner">Before Dinner</option>
-                                <option value="after_dinner">After Dinner</option>
-                                <option value="bedtime">Bedtime</option>
-                                <option value="anytime">Anytime</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-neutral-400 mb-1 font-mono">Alarm Time</label>
-                              <input
-                                id="pres-med-alarm-time"
-                                type="text"
-                                required={presMedAddAlarm}
-                                placeholder="e.g. 08:00"
-                                value={presMedAlarmTime}
-                                onChange={(e) => setPresMedAlarmTime(e.target.value)}
-                                className="w-full bg-neutral-950 border border-neutral-750 rounded-lg px-2 py-1 text-center text-[11px] text-white focus:outline-none"
-                              />
-                            </div>
+                      {/* Sync to alarms option - only show when creating new, or hide during edit for clarity */}
+                      {!editingPresMedId && (
+                        <div className="bg-neutral-950/60 p-3 rounded-xl border border-neutral-850 space-y-2.5 mt-1">
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="pres-med-sync-alarm"
+                              type="checkbox"
+                              checked={presMedAddAlarm}
+                              onChange={(e) => setPresMedAddAlarm(e.target.checked)}
+                              className="w-4 h-4 rounded bg-neutral-950 border-neutral-700 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
+                            />
+                            <label htmlFor="pres-med-sync-alarm" className="text-neutral-300 font-bold select-none cursor-pointer text-[11px]">
+                              Also synchronize an alarm reminder on Daily Checklist
+                            </label>
                           </div>
-                        )}
-                      </div>
+
+                          {presMedAddAlarm && (
+                            <div className="grid grid-cols-2 gap-3 pl-6 pt-1 animate-fadeIn border-l border-neutral-800">
+                              <div>
+                                <label className="block text-[10px] text-neutral-400 mb-1 font-mono">Timing Relation</label>
+                                <select
+                                  id="pres-med-alarm-timing"
+                                  value={presMedAlarmTiming}
+                                  onChange={(e) => setPresMedAlarmTiming(e.target.value as any)}
+                                  className="w-full bg-neutral-950 border border-neutral-750 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none"
+                                >
+                                  <option value="before_breakfast">Before Breakfast</option>
+                                  <option value="after_breakfast">After Breakfast</option>
+                                  <option value="before_lunch">Before Lunch</option>
+                                  <option value="after_lunch">After Lunch</option>
+                                  <option value="before_dinner">Before Dinner</option>
+                                  <option value="after_dinner">After Dinner</option>
+                                  <option value="bedtime">Bedtime</option>
+                                  <option value="anytime">Anytime</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-neutral-400 mb-1 font-mono">Alarm Time</label>
+                                <input
+                                  id="pres-med-alarm-time"
+                                  type="text"
+                                  required={presMedAddAlarm}
+                                  placeholder="e.g. 08:00"
+                                  value={presMedAlarmTime}
+                                  onChange={(e) => setPresMedAlarmTime(e.target.value)}
+                                  className="w-full bg-neutral-950 border border-neutral-750 rounded-lg px-2 py-1 text-center text-[11px] text-white focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         id="btn-pres-cancel"
                         type="button"
-                        onClick={() => setNewPresMedForm(false)}
+                        onClick={() => {
+                          setNewPresMedForm(false);
+                          setEditingPresMedId(null);
+                          setPresMedName("");
+                          setPresMedDosage("");
+                          setPresMedFrequency("Once daily");
+                          setPresMedDescription("");
+                          setPresMedSideEffects("");
+                          setPresMedSpecialInstructions("");
+                        }}
                         className="flex-1 bg-neutral-850 hover:bg-neutral-800 border border-neutral-700 py-2 rounded-xl text-neutral-300 font-bold transition-all cursor-pointer text-center"
                       >
                         Cancel
@@ -4723,7 +6528,7 @@ export default function App() {
                         type="submit"
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl transition-all cursor-pointer text-center"
                       >
-                        Save Prescription
+                        {editingPresMedId ? "Save Changes" : "Save Prescription"}
                       </button>
                     </div>
                   </form>
@@ -4745,11 +6550,11 @@ export default function App() {
                         <div key={warning.id} className="p-3 bg-rose-950/45 border border-rose-500/20 rounded-xl space-y-1.5 text-[11px] hover:border-rose-500/40 transition-colors">
                           <div className="flex justify-between items-center">
                             <span className="font-black text-white flex items-center gap-1.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${warning.severity === "high" ? "bg-red-500 animate-pulse" : "bg-amber-500"}`}></span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${warning.severity === "high" ? "bg-red-500 animate-pulse" : "bg-rose-400"}`}></span>
                               {warning.title}
                             </span>
                             <span className={`text-[8.5px] font-mono font-extrabold px-2 py-0.5 rounded uppercase ${
-                              warning.severity === "high" ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              warning.severity === "high" ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
                             }`}>
                               {warning.severity === "high" ? "Critical Risk" : "Moderate Warning"}
                             </span>
@@ -4836,14 +6641,24 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <button
-                                id={`btn-del-pres-${med.id}`}
-                                onClick={() => handleDeletePrescribedMed(med.id)}
-                                className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer"
-                                title="Remove medication"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  id={`btn-edit-pres-${med.id}`}
+                                  onClick={() => handleStartEditPrescribedMed(med)}
+                                  className="p-1.5 text-neutral-500 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all cursor-pointer"
+                                  title="Edit medication details"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  id={`btn-del-pres-${med.id}`}
+                                  onClick={() => handleDeletePrescribedMed(med.id)}
+                                  className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer"
+                                  title="Remove medication"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="space-y-2 text-[11px] leading-relaxed text-zinc-300">
@@ -4926,48 +6741,52 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-bold text-white flex items-center gap-1.5">
-                      <BookOpen className="w-5 h-5 text-indigo-400" /> Patient Dietary & Medicine Handbook
+                      <BookOpen className="w-5 h-5 text-indigo-400" /> Patient Education &amp; Dietary Handbook
                     </h2>
-                    <p className="text-xs text-neutral-400 font-mono">Fasting mechanics, food programs & clinical guides</p>
+                    <p className="text-xs text-neutral-400 font-mono">Evidence-based clinical guides, safety protocols &amp; global food programs</p>
                   </div>
-                </div>
-
-                {/* Sub-tab Toggles */}
-                <div className="flex bg-neutral-900 p-0.5 rounded-xl border border-neutral-800 mt-1">
-                  <button
-                    id="sub-tab-diets"
-                    onClick={() => setHandbookSubTab("diets")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      handbookSubTab === "diets"
-                        ? "bg-indigo-600 text-white shadow-md"
-                        : "text-neutral-400 hover:text-neutral-200"
-                    }`}
-                  >
-                    <Globe className="w-4 h-4" />
-                    <span>Global Diets ({GLOBAL_DIETARY_PROGRAMS.length})</span>
-                  </button>
-                  <button
-                    id="sub-tab-medicines"
-                    onClick={() => setHandbookSubTab("medicines")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      handbookSubTab === "medicines"
-                        ? "bg-indigo-600 text-white shadow-md"
-                        : "text-neutral-400 hover:text-neutral-200"
-                    }`}
-                  >
-                    <Pill className="w-4 h-4" />
-                    <span>Meds Registry</span>
-                  </button>
                 </div>
               </div>
 
-              {handbookSubTab === "diets" && (
+              {/* Handbook Category Subtabs */}
+              <div className="grid grid-cols-2 gap-1.5 bg-neutral-900 border border-neutral-800 p-1 rounded-2xl select-none text-center">
+                <button
+                  type="button"
+                  id="btn-subtab-clinical-guides"
+                  onClick={() => setEducationSubTab("clinical_guides")}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+                    educationSubTab === "clinical_guides"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Clinical Guides &amp; Safety</span>
+                </button>
+                <button
+                  type="button"
+                  id="btn-subtab-cultural-diets"
+                  onClick={() => setEducationSubTab("cultural_diets")}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 select-none ${
+                    educationSubTab === "cultural_diets"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Dietary Programs</span>
+                </button>
+              </div>
+
+              {educationSubTab === "clinical_guides" ? (
+                <EducationalResources />
+              ) : (
                 <div className="space-y-4 animate-fadeIn text-[11px]">
-                  <div className="p-3 bg-indigo-950/10 border border-indigo-900/25 rounded-2xl">
-                    <p className="text-[11px] text-zinc-300 leading-relaxed font-sans text-center">
-                      Select a culturally aligned dietary program below. These menus help adapt traditional regional staples to preserve stable, ideal post-meal and morning fasting glucose levels.
-                    </p>
-                  </div>
+                <div className="p-3 bg-indigo-950/10 border border-indigo-900/25 rounded-2xl">
+                  <p className="text-[11px] text-zinc-300 leading-relaxed font-sans text-center">
+                    Select a culturally aligned dietary program below. These menus help adapt traditional regional staples to preserve stable, ideal post-meal and morning fasting glucose levels.
+                  </p>
+                </div>
 
                   {/* Grid of global programs */}
                   <div className="grid grid-cols-2 gap-2">
@@ -5056,25 +6875,25 @@ export default function App() {
                               <span className="text-[8px] bg-rose-500/10 text-rose-400 px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🍳 Breakfast</span>
                               <span className="text-[10px] text-white font-bold">{selectedProgram.meals.breakfast.name}</span>
                             </div>
-                            <p className="text-[9px] text-[#22d3ee] font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.breakfast.ingredients}</p>
+                            <p className="text-[9px] text-cyan-400 font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.breakfast.ingredients}</p>
                             <p className="text-[9.5px] text-neutral-400 leading-relaxed mt-1">{selectedProgram.meals.breakfast.desc}</p>
                           </div>
 
                           <div className="bg-neutral-950/40 p-2.5 rounded-xl border border-neutral-800/80 hover:border-neutral-700 transition-colors">
                             <div className="flex justify-between items-center pb-1 border-b border-neutral-800/60">
-                              <span className="text-[8px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🥗 Lunch</span>
+                              <span className="text-[8px] bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🥗 Lunch</span>
                               <span className="text-[10px] text-white font-bold">{selectedProgram.meals.lunch.name}</span>
                             </div>
-                            <p className="text-[9px] text-[#22d3ee] font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.lunch.ingredients}</p>
+                            <p className="text-[9px] text-cyan-400 font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.lunch.ingredients}</p>
                             <p className="text-[9.5px] text-neutral-400 leading-relaxed mt-1">{selectedProgram.meals.lunch.desc}</p>
                           </div>
 
                           <div className="bg-neutral-950/40 p-2.5 rounded-xl border border-neutral-800/80 hover:border-neutral-700 transition-colors">
                             <div className="flex justify-between items-center pb-1 border-b border-neutral-800/60">
-                              <span className="text-[8px] bg-[#22d3ee]/10 text-[#22d3ee] px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🍽️ Dinner</span>
+                              <span className="text-[8px] bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🍽️ Dinner</span>
                               <span className="text-[10px] text-white font-bold">{selectedProgram.meals.dinner.name}</span>
                             </div>
-                            <p className="text-[9px] text-[#22d3ee] font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.dinner.ingredients}</p>
+                            <p className="text-[9px] text-cyan-400 font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.dinner.ingredients}</p>
                             <p className="text-[9.5px] text-neutral-400 leading-relaxed mt-1">{selectedProgram.meals.dinner.desc}</p>
                           </div>
 
@@ -5083,7 +6902,7 @@ export default function App() {
                               <span className="text-[8px] bg-pink-500/10 text-pink-400 px-2 py-0.5 rounded-full font-bold font-mono uppercase tracking-wider">🍿 Snacks</span>
                               <span className="text-[10px] text-white font-bold">{selectedProgram.meals.snack.name}</span>
                             </div>
-                            <p className="text-[9px] text-[#22d3ee] font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.snack.ingredients}</p>
+                            <p className="text-[9px] text-cyan-400 font-semibold mt-1 font-mono">Ingredients: {selectedProgram.meals.snack.ingredients}</p>
                             <p className="text-[9.5px] text-neutral-400 leading-relaxed mt-1">{selectedProgram.meals.snack.desc}</p>
                           </div>
                         </div>
@@ -5095,7 +6914,7 @@ export default function App() {
                         <div className="grid grid-cols-1 gap-2">
                           {selectedProgram.superIngredients.map((ing, iIdx) => (
                             <div key={iIdx} className="bg-black/30 p-2.5 rounded-xl border border-white/5 space-y-0.5">
-                              <span className="text-[10.5px] text-[#22d3ee] font-black uppercase font-mono tracking-wider">🌿 {ing.name}</span>
+                              <span className="text-[10.5px] text-cyan-400 font-black uppercase font-mono tracking-wider">🌿 {ing.name}</span>
                               <p className="text-[9.5px] text-neutral-300 leading-relaxed">{ing.clinicalEffect}</p>
                             </div>
                           ))}
@@ -5195,7 +7014,7 @@ export default function App() {
                       <div className="bg-neutral-950 p-4 rounded-2xl border border-indigo-905 space-y-3.5 text-xs animate-fadeIn">
                         <div className="flex justify-between items-center border-b border-indigo-950 pb-2">
                           <div>
-                            <span className="font-mono text-[8px] text-[#22d3ee] block uppercase font-bold">Custom Recipe Adaptation</span>
+                            <span className="font-mono text-[8px] text-cyan-400 block uppercase font-bold">Custom Recipe Adaptation</span>
                             <span className="font-black text-emerald-400 text-sm uppercase tracking-tight">{customizedRecipe.originalDish}</span>
                           </div>
                           <button
@@ -5235,7 +7054,7 @@ export default function App() {
                           </div>
 
                           <div className="space-y-1">
-                            <span className="font-bold text-[#22d3ee] uppercase tracking-widest text-[8px] block font-mono">Safe Ingredients</span>
+                            <span className="font-bold text-cyan-400 uppercase tracking-widest text-[8px] block font-mono">Safe Ingredients</span>
                             <ul className="list-disc pl-4 space-y-1 text-stone-300 text-[10px] font-sans">
                               {customizedRecipe.modifiedRecipe.ingredients.map((ing, iIdx) => (
                                 <li key={iIdx}>{ing}</li>
@@ -5264,214 +7083,73 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {handbookSubTab === "medicines" && (
-                <div className="space-y-4 animate-fadeIn">
-                  {/* SMART GEMINI MEDICINE RESEARCH DECK */}
-                  <div className="bg-gradient-to-br from-indigo-950/20 to-neutral-900/60 border border-indigo-900/30 p-4 rounded-2xl space-y-3 shadow-md">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-4.5 h-4.5 text-indigo-400" />
-                      <span className="font-bold text-white text-xs uppercase tracking-wider">Gemini Medical Research Desk</span>
-                    </div>
-                    
-                    <p className="text-[11px] text-neutral-300 leading-relaxed">
-                      Need details for unlisted prescriptions, active insulin styles, or blood sugar interactions? Query Gemini AI directly for a clinically aligned dosage and side effects breakdown.
-                    </p>
-
-                    <form onSubmit={handleMedicineAISearch} className="space-y-2">
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <input
-                            id="input-ai-med-search"
-                            type="text"
-                            required
-                            placeholder="Enter drug name (e.g. Januvia, Ozempic)"
-                            value={lookupName}
-                            onChange={(e) => setLookupName(e.target.value)}
-                            className="w-full bg-neutral-950 border border-neutral-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold"
-                          />
-                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-500" />
-                        </div>
-                        
-                        <button
-                          id="btn-submit-ai-med-search"
-                          type="submit"
-                          disabled={searchLoading}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-all disabled:opacity-50 select-none shadow-md shrink-0"
-                        >
-                          {searchLoading ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <span>Search</span>
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="flex gap-2 text-[10px] items-center">
-                        <span className="text-neutral-500">Query Filter:</span>
-                        <div className="flex gap-1.5">
-                          {["General Information", "Dosage & Fasting Impact", "Metabolic Interactions"].map((opt) => (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => setSearchType(opt)}
-                              className={`px-2 py-0.5 rounded border text-[9px] transition-all cursor-pointer font-mono ${
-                                searchType === opt 
-                                  ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20 font-semibold" 
-                                  : "bg-neutral-950 text-neutral-500 border-neutral-800"
-                              }`}
-                            >
-                              {opt.split(" ")[0]}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </form>
-
-                    {searchError && (
-                      <div className="p-3 bg-red-500/15 border border-red-500/20 text-red-400 text-[10px] rounded-lg animate-fadeIn">
-                        {searchError}
-                      </div>
-                    )}
-
-                    {/* RENDER AI RETRIEVATION DISCOVERY COMPONENT */}
-                    {searchedMedicine && (
-                      <div className="bg-neutral-950 p-4 rounded-xl border border-indigo-900/40 space-y-3.5 text-xs animate-fadeIn max-h-[300px] overflow-y-auto">
-                        <div className="flex justify-between items-center border-b border-indigo-950 pb-2">
-                          <span className="font-black text-rose-400 text-sm uppercase tracking-tight">{searchedMedicine.name}</span>
-                          <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-2.5 py-0.5 rounded-full font-mono border border-indigo-500/20">AI Guidance</span>
-                        </div>
-
-                        {/* Mandated Disclaimer */}
-                        <div className="text-[9px] text-stone-400 italic bg-black/40 p-2.5 rounded-lg border-l-2 border-indigo-500 leading-relaxed font-sans">
-                          <span className="font-bold text-indigo-400">Medical Warning Checklist:</span> {searchedMedicine.disclaimer}
-                        </div>
-
-                        <div className="space-y-3 leading-dashed font-sans">
-                          <div>
-                            <span className="font-bold text-neutral-300 uppercase tracking-widest text-[9px] block">Medical Description & Action</span>
-                            <p className="text-stone-300 text-[11px] leading-relaxed mt-0.5">{searchedMedicine.description}</p>
-                          </div>
-
-                          <div>
-                            <span className="font-bold text-neutral-300 uppercase tracking-widest text-[9px] block">Prescribed Purpose</span>
-                            <p className="text-stone-300 text-[11px] leading-relaxed mt-0.5">{searchedMedicine.purpose}</p>
-                          </div>
-
-                          <div className="p-2.5 bg-neutral-900 rounded-xl border border-white/5 space-y-1">
-                            <span className="font-bold text-[#22d3ee] uppercase tracking-widest text-[9px] block">Typical Dosage & Meal Relation</span>
-                            <p className="text-stone-300 text-[11px] leading-relaxed mt-0.5">{searchedMedicine.typicalDosage}</p>
-                          </div>
-
-                          <div className="p-2.5 bg-neutral-900 rounded-xl border border-white/5 space-y-1">
-                            <span className="font-bold text-emerald-400 uppercase tracking-widest text-[9px] block">Impact on Fasting/Glucose Levels</span>
-                            <p className="text-stone-300 text-[11px] leading-relaxed mt-0.5">{searchedMedicine.fastingImpact}</p>
-                          </div>
-
-                          <div>
-                            <span className="font-bold text-neutral-300 uppercase tracking-widest text-[9px] block">Standard Side Effects</span>
-                            <ul className="list-disc pl-4 space-y-1 mt-1 text-stone-300 text-[11px]">
-                              {searchedMedicine.commonSideEffects?.map((se, idx) => (
-                                <li key={idx}>{se}</li>
-                              ))}
-                            </ul>
-                          </div>
-
-                          <div>
-                            <span className="font-bold text-neutral-300 uppercase tracking-widest text-[9px] block">Key Dietary & Beverage Interactions</span>
-                            <p className="text-stone-300 text-[11px] leading-relaxed mt-0.5">{searchedMedicine.dietaryInteractions}</p>
-                          </div>
-
-                          <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-rose-300/90 leading-relaxed font-sans">
-                            <span className="font-bold text-rose-400 uppercase tracking-widest text-[9px] block flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Extreme Warnings & Risk Indicators
-                            </span>
-                            <p className="text-[11px] mt-1 leading-snug">{searchedMedicine.warnings}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PRE-BUILT MEDICAL DIRECTORIES */}
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-widest px-1">Common Diabetes Medications Checklist</h3>
-                    
-                    <div className="space-y-3">
-                      {MEDICINE_LIST.map((med, idx) => (
-                        <details 
-                          key={idx}
-                          className="group bg-neutral-900 border border-neutral-800/80 rounded-2xl overflow-hidden font-sans text-xs transition-all [&_summary::-webkit-details-marker]:hidden"
-                        >
-                          <summary className="flex items-center justify-between p-4 cursor-pointer select-none border-b border-transparent group-open:border-neutral-800 shrink-0">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
-                                <Pill className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <span className="font-bold text-white text-[12px] block group-open:text-indigo-400 transition-colors">{med.name}</span>
-                                <span className="text-[9px] text-zinc-500 font-semibold font-mono tracking-wider uppercase">Click to view mechanics & details</span>
-                              </div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-neutral-500 group-open:rotate-90 transition-transform" />
-                          </summary>
-
-                          <div className="p-4 space-y-3.5 bg-neutral-900 border-t border-neutral-800 leading-relaxed text-stone-300">
-                            <p className="text-[10px] text-neutral-400 italic bg-black/30 p-2.5 rounded-lg border-l-2 border-stone-500 leading-snug">
-                              {med.disclaimer}
-                            </p>
-
-                            <div>
-                              <span className="font-bold text-neutral-200 uppercase tracking-widest text-[9px] block">What it Is & How it Works</span>
-                              <p className="text-[11.5px] mt-0.5 leading-relaxed">{med.description}</p>
-                            </div>
-
-                            <div>
-                              <span className="font-bold text-neutral-200 uppercase tracking-widest text-[9px] block">Prescribed Purpose</span>
-                              <p className="text-[11.5px] mt-0.5 leading-relaxed">{med.purpose}</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 pt-1">
-                              <div className="p-2.5 bg-neutral-950 rounded-xl border border-neutral-800">
-                                <span className="font-bold text-[#22d3ee] uppercase tracking-widest class text-[9px] block">Dosage Instructions</span>
-                                <p className="text-[10px] mt-1 leading-relaxed text-stone-300">{med.typicalDosage}</p>
-                              </div>
-                              <div className="p-2.5 bg-neutral-950 rounded-xl border border-neutral-800">
-                                <span className="font-bold text-emerald-400 uppercase tracking-widest text-[9px] block">Impact on Fasting Checked</span>
-                                <p className="text-[10px] mt-1 leading-relaxed text-stone-300">{med.fastingImpact}</p>
-                              </div>
-                            </div>
-
-                            <div>
-                              <span className="font-bold text-neutral-200 uppercase tracking-widest text-[9px] block">Common Adverse Events</span>
-                              <ul className="list-disc pl-4 space-y-1.5 mt-1 test-[11px] text-zinc-300">
-                                {med.commonSideEffects.map((se, sIdx) => (
-                                  <li key={sIdx}>{se}</li>
-                                ))}
-                              </ul>
-                            </div>
-
-                            <div>
-                              <span className="font-bold text-neutral-200 uppercase tracking-widest text-[9px] block">Meal & Drink Warnings</span>
-                              <p className="text-[11.5px] mt-0.5 leading-relaxed">{med.dietaryInteractions}</p>
-                            </div>
-
-                            <div className="p-3 bg-red-950/10 border border-red-500/25 rounded-xl text-rose-300/95 font-sans">
-                              <span className="font-bold text-rose-400 uppercase tracking-widest text-[9px] block flex items-center gap-1 font-mono">
-                                <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Critical Warnings
-                              </span>
-                              <p className="text-[10px] mt-1.5 leading-snug">{med.warnings}</p>
-                            </div>
-                          </div>
-                        </details>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </motion.div>
           );
         })()}
+
+        {/* --- SCREEN: DIET PLANNER --- */}
+        {activeTab === "diet" && (
+          <motion.div
+            key="diet"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <DietPlanner foodLogs={foodLogs} onAddFoodLog={handleAddFoodLog} />
+          </motion.div>
+        )}
+
+        {/* --- SCREEN: WALKING TRACKER --- */}
+        {activeTab === "walking" && (
+          <motion.div
+            key="walking"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <WalkingTracker
+              activityLogs={activityLogs}
+              onAddActivityLog={handleAddActivityLog}
+              onDeleteActivityLog={handleDeleteActivityLog}
+            />
+          </motion.div>
+        )}
+
+        {/* --- SCREEN: AI ASSISTANT --- */}
+        {activeTab === "assistant" && (
+          <motion.div
+            key="assistant"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <AiAssistantTab profile={profile} readings={readings} />
+          </motion.div>
+        )}
+
+        {/* --- SCREEN: FAMILY MONITORING & WHATSAPP NOTIFICATIONS --- */}
+        {activeTab === "family" && (
+          <motion.div
+            key="family"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <FamilyMonitoring
+              profile={profile}
+              readings={readings}
+              onOpenMonetizationHub={() => setShowMonetizationModal(true)}
+            />
+          </motion.div>
+        )}
 
         {/* --- SCREEN 5: SETTINGS / USER PROFILE --- */}
         {activeTab === "profile" && (
@@ -5491,6 +7169,11 @@ export default function App() {
               onCreateProfile={handleCreateProfile}
               onDeleteProfile={handleDeleteProfile}
               onSave={handleProfileSave} 
+              onExportData={handleExportAllData}
+              onDeleteAccountData={handleDeleteAccountData}
+              onOpenDisclaimer={() => setDisclaimerModalOpen(true)}
+              onOpenAndroidModal={() => setShowAndroidModal(true)}
+              onOpenMonetizationHub={() => setShowMonetizationModal(true)}
             />
           </motion.div>
         )}
@@ -5572,7 +7255,7 @@ export default function App() {
           id="tab-btn-history"
           onClick={() => changeTab("history")}
           className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
-            activeTab === "history" ? "text-amber-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
+            activeTab === "history" ? "text-cyan-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
           <Clock className="w-5 h-5 block" />
@@ -5583,13 +7266,146 @@ export default function App() {
           id="tab-btn-profile"
           onClick={() => changeTab("profile")}
           className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
-            activeTab === "profile" ? "text-amber-500 font-bold" : "text-neutral-500 hover:text-neutral-300"
+            activeTab === "profile" ? "text-teal-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
           <Settings className="w-5 h-5 block" />
           <span className="text-[9px] mt-1 tracking-tight">Targets</span>
         </button>
       </nav>
+
+      {/* COMPLIANCE & SAFETY MODALS */}
+      <MedicalDisclaimerModal
+        isOpen={disclaimerModalOpen}
+        onAccept={() => {
+          localStorage.setItem("dia_disclaimer_accepted", "true");
+          setDisclaimerModalOpen(false);
+        }}
+      />
+
+      <BiometricLockModal
+        isOpen={isBiometricLocked}
+        pinCode={profile.pinCode || "1234"}
+        patientName={profile.name}
+        onUnlock={() => setIsBiometricLocked(false)}
+      />
+
+      {/* CLINICAL SAFETY & DANGEROUS LEVEL ALERT MODAL (HYPO & HYPER) */}
+      <DangerousGlucoseAlertModal
+        alertData={dangerousAlert}
+        onClose={() => setDangerousAlert({ ...dangerousAlert, isOpen: false })}
+        profile={profile}
+      />
+
+      {/* GLUCOMETER HARDWARE SYNCHRONIZATION MODAL */}
+      <GlucometerSyncModal
+        isOpen={showGlucometerModal}
+        onClose={() => setShowGlucometerModal(false)}
+        onImportReadings={handleImportGlucometerReadings}
+        profile={profile}
+        onUpdateProfile={handleUpdateProfile}
+      />
+
+      {/* CLINICAL GOAL SETTING & PROGRESS REPORTS MODAL */}
+      <GoalsAndProgressModal
+        isOpen={showGoalsModal}
+        onClose={() => setShowGoalsModal(false)}
+        profile={profile}
+        readings={readings}
+        onSaveProfile={handleUpdateProfile}
+      />
+
+      {/* WEEKLY CLINICAL REVIEW & ENCRYPTED BACKUP MODAL */}
+      <WeeklyReviewModal
+        isOpen={showWeeklyReviewModal}
+        onClose={() => setShowWeeklyReviewModal(false)}
+        profile={profile}
+        readings={readings}
+        foodLogs={foodLogs}
+        activityLogs={activityLogs}
+        medicationLogs={medLogs}
+        onImportBackup={handleRestoreBackup}
+      />
+
+      {/* DOUBLE-DOSE SAFETY PREVENTION MODAL */}
+      {doubleDoseModal.isOpen && doubleDoseModal.reminder && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-amber-500/40 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-fadeIn text-neutral-200">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Double-Dose Prevention Warning</h3>
+                <p className="text-xs text-amber-300/90 font-mono mt-0.5">Medication Safety Guard</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-neutral-950 border border-neutral-800 rounded-2xl space-y-2 text-xs">
+              <p className="font-semibold text-white">
+                <span className="text-amber-400 font-bold">{doubleDoseModal.reminder.name}</span> ({doubleDoseModal.reminder.dosage}) was already logged at <span className="text-amber-300 font-bold">{doubleDoseModal.lastTakenTime}</span> today.
+              </p>
+              <p className="text-neutral-400 leading-relaxed text-[11.5px]">
+                Taking diabetes medications or insulin doses too close together can lead to dangerous hypoglycemia (low blood sugar). Please verify your intake before proceeding.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                id="btn-confirm-cancel-double-dose"
+                onClick={() => setDoubleDoseModal({ isOpen: false, reminder: null, lastTakenTime: "" })}
+                className="w-full py-2.5 px-4 bg-neutral-800 hover:bg-neutral-700 text-white font-bold rounded-xl transition-all cursor-pointer text-xs"
+              >
+                Cancel (Keep Dose Safe)
+              </button>
+
+              <button
+                type="button"
+                id="btn-undo-previous-dose"
+                onClick={() => handleUndoMedLog(doubleDoseModal.reminder!.id)}
+                className="w-full py-2.5 px-4 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 font-semibold rounded-xl transition-all cursor-pointer text-xs"
+              >
+                Mark as Not Taken (Undo Previous Log)
+              </button>
+
+              <button
+                type="button"
+                id="btn-confirm-prescribed-extra-dose"
+                onClick={() => handleConfirmDoubleDose(doubleDoseModal.reminder!, doubleDoseModal.units)}
+                className="w-full py-2 px-3 text-[11px] text-neutral-400 hover:text-amber-300 transition-colors cursor-pointer text-center block"
+              >
+                I have a doctor's order for an additional dose today
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ANDROID APP LAUNCH & PWA WEBAPK MODAL */}
+      <AndroidInstallModal
+        isOpen={showAndroidModal}
+        onClose={() => setShowAndroidModal(false)}
+        isFullscreenView={isFullscreenAndroid}
+        onToggleFullscreenView={() => setIsFullscreenAndroid(!isFullscreenAndroid)}
+      />
+
+      {/* 15-MINUTE MORNING FASTING GLUCOSE PRE-CHECK ALERT MODAL */}
+      <FastingAlertBanner
+        config={fastingReminderConfig}
+        isOpen={showFastingAlertModal}
+        onClose={() => setShowFastingAlertModal(false)}
+        onSnooze={handleSnoozeFastingAlert}
+        onLogFastingNow={handleLogFastingFromReminder}
+      />
+
+      {/* MONETIZATION & PRO MEMBERSHIP HUB MODAL */}
+      <MonetizationHubModal
+        isOpen={showMonetizationModal}
+        onClose={() => setShowMonetizationModal(false)}
+        profile={profile}
+        onUpdateTier={handleUpdateMembershipTier}
+      />
 
     </AndroidFrame>
   );
@@ -5645,41 +7461,172 @@ function PlayChartPlaceholderIcon(props: React.SVGProps<SVGSVGElement>) {
 // Charts customized interactive tooltips
 function CustomChartTooltip({ active, payload, label, profile }: any) {
   if (active && payload && payload.length) {
-    const data = payload[0].payload as GlucoseReading;
+    const data = payload[0].payload as GlucoseReading & {
+      fastingValue?: number | null;
+      postValue?: number | null;
+      isAggregated?: boolean;
+      rawLogsCount?: number;
+    };
+
+    const isFasting = data.type === "fasting" || (data.fastingValue !== null && data.fastingValue !== undefined);
+    const targetMin = profile ? (isFasting ? profile.targetFastingMin : profile.targetPostMin) : 70;
+    const targetMax = profile ? (isFasting ? profile.targetFastingMax : profile.targetPostMax) : (isFasting ? 130 : 180);
+    const val = data.value;
+
+    let targetDeltaText = "";
+    let targetDeltaColor = "text-emerald-400";
+    if (val < targetMin) {
+      targetDeltaText = `↓ ${targetMin - val} mg/dL below target`;
+      targetDeltaColor = "text-rose-400";
+    } else if (val > targetMax) {
+      targetDeltaText = `↑ +${val - targetMax} mg/dL above target`;
+      targetDeltaColor = "text-amber-400";
+    } else {
+      targetDeltaText = "✓ In target clinical range";
+      targetDeltaColor = "text-emerald-400";
+    }
+
+    const stressVal = data.stressLevel;
+    const hasStress = stressVal !== undefined && stressVal !== null;
+    const stressRating = hasStress
+      ? stressVal <= 3
+        ? { label: "Low", desc: "Optimal / Relaxed", color: "text-emerald-400", barColor: "bg-emerald-500" }
+        : stressVal <= 6
+        ? { label: "Moderate", desc: "Mild Cortisol Impact", color: "text-sky-400", barColor: "bg-sky-500" }
+        : { label: "High", desc: "Cortisol Spike • Hyperglycemia Risk", color: "text-rose-400", barColor: "bg-rose-500" }
+      : null;
+
+    const noteText = (data.notes || "").trim();
+    const isLongNote = noteText.length > 50;
+
     return (
-      <div className="bg-neutral-900 border border-neutral-700/85 p-3 rounded-xl space-y-1.5 font-sans leading-relaxed shadow-lg max-w-[200px]">
-        <div className="text-[9px] font-bold text-neutral-400 font-mono flex justify-between items-center pb-1 border-b border-neutral-800">
-          <span>{data.date}</span>
-          <span>{data.time}</span>
-        </div>
-        
-        <div className="flex items-center gap-1 mt-1 justify-between">
-          <span className="text-[10px] text-zinc-300 font-medium">Type: {data.type === "fasting" ? "Fasting" : "Post-Meal"}</span>
-          <span className="text-[10px] font-mono text-zinc-500 font-semibold">{data.category}</span>
+      <div className="bg-neutral-900/95 border border-neutral-700/80 p-3 rounded-2xl space-y-2 font-sans shadow-2xl w-64 max-w-[270px] backdrop-blur-md select-none">
+        {/* Top Header: Date, Time & Category Badge */}
+        <div className="flex items-center justify-between pb-1.5 border-b border-neutral-800 text-[10px] font-mono">
+          <div className="flex items-center gap-1.5 text-neutral-300">
+            <Calendar className="w-3 h-3 text-neutral-400 shrink-0" />
+            <span>{data.date}</span>
+            {data.time && data.time !== "00:00" && (
+              <span className="text-neutral-400">· {data.time}</span>
+            )}
+          </div>
+
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+            data.category === "Hypoglycemia"
+              ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+              : data.category === "Normal"
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+              : data.category === "Prediabetes"
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+              : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+          }`}>
+            {data.category}
+          </span>
         </div>
 
-        <div className="flex items-baseline gap-1 bg-black/35 py-1 px-2 rounded-lg justify-center border border-white/5">
-          <span className="text-sm font-black text-white">{data.value}</span>
-          <span className="text-[9px] text-stone-500 font-mono">mg/dL</span>
-        </div>
-
-        {data.stressLevel !== undefined && (
-          <div className="flex items-center justify-between text-[9px] font-mono border-t border-neutral-800/60 pt-1.5 mt-1">
-            <span className="text-stone-500">Stress Correlation:</span>
-            <span className={`font-bold ${
-              data.stressLevel <= 3 ? "text-emerald-400" :
-              data.stressLevel <= 7 ? "text-amber-400" :
-              "text-rose-400"
-            }`}>
-              {data.stressLevel}/10
+        {/* Glucose Reading Metric Block */}
+        <div className="bg-neutral-950/80 p-2 rounded-xl border border-neutral-800/80 flex items-center justify-between">
+          <div>
+            <span className="text-[9px] text-neutral-400 uppercase font-mono block">
+              {data.type === "fasting" ? "🌅 Fasting Glucose" : data.type === "post_fasting" ? "🍽️ Post-Meal Glucose" : "📊 Aggregated Glucose"}
             </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-lg font-black text-white font-mono">{data.value}</span>
+              <span className="text-[10px] text-neutral-400 font-mono">mg/dL</span>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className={`text-[9.5px] font-mono font-bold block ${targetDeltaColor}`}>
+              {targetDeltaText}
+            </span>
+            <span className="text-[8.5px] text-neutral-400 font-mono">
+              Target: {targetMin}-{targetMax} mg/dL
+            </span>
+          </div>
+        </div>
+
+        {/* Stress Level (1-10) Context Section */}
+        <div className="bg-neutral-950/60 p-2 rounded-xl border border-neutral-800/70 space-y-1">
+          <div className="flex items-center justify-between text-[10px]">
+            <div className="flex items-center gap-1.5 text-neutral-300 font-medium">
+              <HeartPulse className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>Stress Level:</span>
+            </div>
+
+            {hasStress && stressRating ? (
+              <div className="flex items-center gap-1 font-mono font-bold">
+                <span className={stressRating.color}>{stressVal}/10</span>
+                <span className={`text-[8.5px] px-1 py-0.2 rounded bg-neutral-900 border border-neutral-800 ${stressRating.color}`}>
+                  {stressRating.label}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[9px] text-neutral-400 font-mono italic">Not logged</span>
+            )}
+          </div>
+
+          {hasStress && stressRating ? (
+            <div>
+              {/* 10-step visual segmented bar */}
+              <div className="grid grid-cols-10 gap-0.5 h-1.5 rounded-full overflow-hidden bg-neutral-800/80 my-1">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`h-full rounded-sm transition-all ${
+                      i < (stressVal || 0)
+                        ? stressRating.barColor
+                        : "bg-neutral-800"
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="text-[8.5px] text-neutral-400 font-mono block leading-tight">
+                {stressRating.desc}
+              </span>
+            </div>
+          ) : (
+            <span className="text-[8.5px] text-neutral-400 font-mono block leading-tight">
+              Stress elevates counter-regulatory cortisol & glucose.
+            </span>
+          )}
+        </div>
+
+        {/* Specific Note Content: Enhanced Readable & Scrollable Area if > 50 chars */}
+        {noteText && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[9px] font-mono text-neutral-400">
+              <span className="font-bold uppercase tracking-wider">Log Note:</span>
+              {isLongNote ? (
+                <span className="text-cyan-400 font-bold bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40 text-[8px]">
+                  Scrollable ({noteText.length} chars)
+                </span>
+              ) : (
+                <span className="text-neutral-400 text-[8.5px]">{noteText.length} chars</span>
+              )}
+            </div>
+
+            {isLongNote ? (
+              <div 
+                tabIndex={0}
+                className="max-h-20 overflow-y-auto pr-1 text-[10px] text-neutral-200 bg-neutral-950/90 p-2 rounded-xl border border-neutral-800 leading-relaxed font-sans break-words select-text focus:outline-none focus:border-neutral-700"
+                style={{ scrollbarWidth: "thin" }}
+              >
+                "{noteText}"
+              </div>
+            ) : (
+              <div className="text-[10px] text-neutral-300 bg-neutral-950/60 p-2 rounded-xl border border-neutral-800/80 leading-relaxed font-sans italic break-words">
+                "{noteText}"
+              </div>
+            )}
           </div>
         )}
 
-        {data.notes && (
-          <p className="text-[9px] text-stone-400 mt-1 italic leading-snug truncate">
-            "{data.notes}"
-          </p>
+        {/* Aggregation context footnote if applicable */}
+        {data.isAggregated && (
+          <div className="text-[8.5px] text-neutral-400 font-mono text-center pt-0.5 border-t border-neutral-800/60">
+            Averaged across {data.rawLogsCount} readings in window
+          </div>
         )}
       </div>
     );
@@ -5720,7 +7667,7 @@ function CustomVariabilityTooltip({ active, payload }: any) {
         <div className={`text-[9px] font-bold text-center py-1 mt-1 rounded-md border ${
           data.cv < 36 
             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-            : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
         }`}>
           {data.cv < 36 ? "✓ STABLE SUGAR LEVELS" : "⚠️ HIGH FLUCTUATIONS"}
         </div>

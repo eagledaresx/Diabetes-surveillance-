@@ -244,7 +244,7 @@ export default function FoodLogger({
       case "Normal":
         return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
       case "Prediabetes":
-        return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+        return "bg-rose-500/10 text-rose-400 border-rose-500/20";
       case "Hypoglycemia":
         return "bg-sky-500/10 text-sky-400 border-sky-500/20";
       case "Diabetes":
@@ -356,9 +356,9 @@ export default function FoodLogger({
     const totalCal = carbsCal + proteinCal + fatCal;
 
     const chartData = [
-      { name: "Carbohydrates", value: totalCarbs, calories: carbsCal, color: "#f59e0b" }, // Amber
-      { name: "Protein", value: totalProtein, calories: proteinCal, color: "#10b981" },     // Emerald
-      { name: "Fat", value: totalFat, calories: fatCal, color: "#3b82f6" }            // Blue
+      { name: "Carbohydrates", value: totalCarbs, calories: carbsCal, color: "#b5736e" }, // Matte Terracotta
+      { name: "Protein", value: totalProtein, calories: proteinCal, color: "#547b69" },     // Matte Sage
+      { name: "Fat", value: totalFat, calories: fatCal, color: "#4f708d" }            // Matte Denim
     ].filter(item => item.value > 0);
 
     return {
@@ -848,7 +848,7 @@ export default function FoodLogger({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
                     <span className="text-neutral-300 font-bold font-sans">Carbohydrates</span>
                   </div>
                   <div className="font-mono text-[11px] text-neutral-400">
@@ -856,7 +856,7 @@ export default function FoodLogger({
                     <span className="text-neutral-600 mx-1">•</span>
                     <span>{dailyMacroStats.totalCarbs * 4} kcal</span>
                     <span className="text-neutral-600 mx-1">•</span>
-                    <span className="text-amber-400 font-extrabold font-mono">
+                    <span className="text-rose-400 font-extrabold font-mono">
                       {dailyMacroStats.totalGrams > 0 
                         ? `${Math.round((dailyMacroStats.totalCarbs / dailyMacroStats.totalGrams) * 100)}%`
                         : "0%"}
@@ -865,7 +865,7 @@ export default function FoodLogger({
                 </div>
                 <div className="h-2 w-full bg-neutral-950 rounded-full overflow-hidden border border-neutral-850">
                   <div 
-                    className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                    className="h-full bg-rose-500 rounded-full transition-all duration-500"
                     style={{ 
                       width: dailyMacroStats.totalGrams > 0 
                         ? `${(dailyMacroStats.totalCarbs / dailyMacroStats.totalGrams) * 100}%`
@@ -999,7 +999,7 @@ export default function FoodLogger({
                         <span className="text-neutral-500 font-mono">Spike Rate:</span>
                         <span className={`font-mono font-black ${
                           stat.spikeRate >= 50 ? "text-rose-400" :
-                          stat.spikeRate > 0 ? "text-amber-400" :
+                          stat.spikeRate > 0 ? "text-rose-300" :
                           "text-emerald-400"
                         }`}>
                           {stat.totalWithGlucose > 0 ? `${stat.spikeRate}%` : "0% (No data)"}
@@ -1119,10 +1119,10 @@ export default function FoodLogger({
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className={`text-[9px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full ${
-                            log.mealType === "Breakfast" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                            log.mealType === "Breakfast" ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" :
                             log.mealType === "Lunch" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" :
                             log.mealType === "Dinner" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/10" :
-                            "bg-orange-500/10 text-orange-400 border border-orange-500/10"
+                            "bg-purple-500/10 text-purple-400 border border-purple-500/10"
                           }`}>
                             {log.mealType}
                           </span>
@@ -1160,8 +1160,8 @@ export default function FoodLogger({
                         </div>
                         {log.carbsIntake !== undefined && (
                           <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral-950 border border-neutral-850 rounded-lg">
-                            <span className="text-[9px] text-amber-500 font-mono uppercase font-bold">Carbs:</span>
-                            <span className="font-bold text-amber-400 font-mono">{log.carbsIntake}g</span>
+                            <span className="text-[9px] text-rose-400 font-mono uppercase font-bold">Carbs:</span>
+                            <span className="font-bold text-rose-300 font-mono">{log.carbsIntake}g</span>
                           </div>
                         )}
                         {log.proteinIntake !== undefined && (
@@ -1226,7 +1226,7 @@ export default function FoodLogger({
                           {/* Quick smart substitution checklist suggestion */}
                           {alliedGlucose.value >= 140 && log.impactScale === "high" && (
                             <div className="bg-rose-500/5 text-[9.5px] border border-rose-500/10 text-rose-400/90 p-2 rounded-lg leading-relaxed flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-400 animate-pulse" />
+                              <Sparkles className="w-3.5 h-3.5 shrink-0 text-rose-400 animate-pulse" />
                               <span>Substitute white rice/flour with steel-cut grains or quinoa next time to reduce post-meal peaks.</span>
                             </div>
                           )}

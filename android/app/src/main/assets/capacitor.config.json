@@ -1,0 +1,5 @@
+{
+	"appId": "com.yourdomain.diabetesapp",
+	"appName": "Diabetes Surveillance",
+	"webDir": "dist"
+}

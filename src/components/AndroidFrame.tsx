@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { Signal, Wifi, Battery, ChevronLeft, Circle, Square } from "lucide-react";
+import { Signal, Wifi, Battery, ChevronLeft, Circle, Square, Smartphone, Maximize2, Minimize2 } from "lucide-react";
 
 interface AndroidFrameProps {
   children: React.ReactNode;
   onBackPress?: () => void;
   onHomePress?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  onOpenAndroidModal?: () => void;
 }
 
-export default function AndroidFrame({ children, onBackPress, onHomePress }: AndroidFrameProps) {
+export default function AndroidFrame({ 
+  children, 
+  onBackPress, 
+  onHomePress,
+  isFullscreen = false,
+  onToggleFullscreen,
+  onOpenAndroidModal
+}: AndroidFrameProps) {
   const [currentTime, setCurrentTime] = useState("");
 
   useEffect(() => {
@@ -26,25 +36,61 @@ export default function AndroidFrame({ children, onBackPress, onHomePress }: And
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-0 md:p-6 font-sans transition-colors duration-300" style={{ backgroundColor: "var(--bg-frame, #020617)" }}>
-      {/* Outer Phone Shell Case - Only rendered as mock on desktop/tablet */}
-      <div className="w-full max-w-[460px] md:h-[880px] h-screen md:rounded-[48px] md:border-8 md:border-neutral-800 md:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative flex flex-col overflow-hidden transition-all duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
+    <div 
+      className={`min-h-screen flex items-center justify-center font-sans transition-colors duration-300 ${
+        isFullscreen ? "p-0 w-full" : "p-0 md:p-6"
+      }`} 
+      style={{ backgroundColor: "var(--bg-frame, #020617)" }}
+    >
+      {/* Phone Shell Case: expands to 100% when isFullscreen is true */}
+      <div 
+        className={`w-full relative flex flex-col overflow-hidden transition-all duration-300 ${
+          isFullscreen 
+            ? "max-w-none h-screen rounded-none border-0 shadow-none" 
+            : "max-w-[460px] md:h-[880px] h-screen md:rounded-[48px] md:border-8 md:border-neutral-800 md:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)]"
+        }`} 
+        style={{ backgroundColor: "var(--bg-shelf, #121214)" }}
+      >
         
-        {/* Dynamic Notch / Camera Hole on desktop */}
-        <div className="hidden md:block absolute top-3 left-1/2 -translate-x-1/2 w-32 h-6 bg-neutral-950/80 rounded-full z-30 flex items-center justify-center border border-white/5">
-          <div className="w-3.5 h-3.5 bg-neutral-950 rounded-full border-2 border-neutral-800 mr-8"></div>
-          <div className="w-1.5 h-1.5 bg-blue-900/50 rounded-full"></div>
-        </div>
+        {/* Dynamic Notch / Camera Hole on desktop (only in chassis mode) */}
+        {!isFullscreen && (
+          <div className="hidden md:block absolute top-3 left-1/2 -translate-x-1/2 w-32 h-6 bg-neutral-950/80 rounded-full z-30 flex items-center justify-center border border-white/5">
+            <div className="w-3.5 h-3.5 bg-neutral-950 rounded-full border-2 border-neutral-800 mr-8"></div>
+            <div className="w-1.5 h-1.5 bg-blue-900/50 rounded-full"></div>
+          </div>
+        )}
 
-        {/* Status Bar */}
-        <div className="text-neutral-300 px-6 pt-3 pb-2 flex justify-between items-center text-xs font-medium tracking-wide border-b border-white/5 select-none z-20 shrink-0 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
-          <div>{currentTime}</div>
-          
-          {/* Status Bar Icons */}
+        {/* Android Status Bar */}
+        <div className="text-neutral-300 px-4 sm:px-6 pt-3 pb-2 flex justify-between items-center text-xs font-medium tracking-wide border-b border-white/5 select-none z-20 shrink-0 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[#22c55e] bg-[#22c55e]/10 px-1.5 py-0.5 rounded font-bold font-mono border border-emerald-500/10">
-              SECURE Surveillance
-            </span>
+            <span>{currentTime}</span>
+            {onOpenAndroidModal && (
+              <button
+                type="button"
+                id="btn-android-app-badge"
+                onClick={onOpenAndroidModal}
+                className="hidden sm:flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-full font-bold font-mono border border-emerald-500/20 transition-all cursor-pointer"
+                title="Launch as Android App"
+              >
+                <Smartphone className="w-3 h-3 text-emerald-400" />
+                <span>Android App</span>
+              </button>
+            )}
+          </div>
+          
+          {/* Status Bar Icons + Viewport Switcher */}
+          <div className="flex items-center gap-2">
+            {onToggleFullscreen && (
+              <button
+                type="button"
+                id="btn-toggle-android-view"
+                onClick={onToggleFullscreen}
+                className="p-1 text-neutral-400 hover:text-white rounded transition-colors cursor-pointer"
+                title={isFullscreen ? "Switch to Phone Mockup Chassis" : "Switch to Fullscreen Android Mode"}
+              >
+                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-cyan-400" /> : <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />}
+              </button>
+            )}
             <Signal className="w-3.5 h-3.5 text-neutral-400" />
             <Wifi className="w-3.5 h-3.5 text-neutral-400" />
             <div className="flex items-center gap-1 bg-white/5 px-1 py-0.5 rounded text-[10px] border border-white/5">
@@ -81,15 +127,18 @@ export default function AndroidFrame({ children, onBackPress, onHomePress }: And
           
           <button 
             id="android-nav-task"
-            className="p-1 hover:text-neutral-300 transition-colors opacity-75 cursor-default"
-            title="Overview"
+            onClick={onOpenAndroidModal}
+            className="p-1 hover:text-neutral-300 transition-colors cursor-pointer"
+            title="Android App Options"
           >
-            <Square className="w-4 h-4 text-neutral-500" />
+            <Square className="w-4 h-4 text-neutral-500 hover:text-neutral-300" />
           </button>
         </div>
 
         {/* Decorative Home Indicator Bar for modern touch gesture */}
-        <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-neutral-600 rounded-full z-30"></div>
+        {!isFullscreen && (
+          <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-neutral-600 rounded-full z-30"></div>
+        )}
       </div>
     </div>
   );

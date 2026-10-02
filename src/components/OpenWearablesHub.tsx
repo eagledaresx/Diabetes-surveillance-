@@ -1008,7 +1008,7 @@ export default function OpenWearablesHub({
                   <div className="bg-neutral-900 border-b border-neutral-850/80 px-4 py-2 flex items-center justify-between font-sans">
                     <div className="flex items-center gap-1.5 select-none">
                       <span className="w-2.5 h-2.5 bg-rose-500 rounded-full inline-block"></span>
-                      <span className="w-2.5 h-2.5 bg-amber-500 rounded-full inline-block"></span>
+                      <span className="w-2.5 h-2.5 bg-neutral-600 rounded-full inline-block"></span>
                       <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block"></span>
                       <span className="text-[10px] text-zinc-500 ml-1.5 font-mono">bash — visitor@open-wearables-sandbox: {currentDirectory}</span>
                     </div>

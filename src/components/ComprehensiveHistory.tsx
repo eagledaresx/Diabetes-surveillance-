@@ -248,7 +248,7 @@ export default function ComprehensiveHistory({
               <span className="text-[10px] text-neutral-400 font-mono block">
                 {isFasting ? "Fasting (Morning)" : "Post-Meal"} • <span className={
                   g.category === "Normal" ? "text-green-400 font-bold" :
-                  g.category === "Hypoglycemia" ? "text-amber-400 font-bold" : "text-rose-400 font-bold"
+                  g.category === "Hypoglycemia" ? "text-rose-400 font-bold" : "text-rose-400 font-bold"
                 }>{g.category}</span>
               </span>
             </div>
@@ -291,7 +291,7 @@ export default function ComprehensiveHistory({
         const a: ActivityLog = item.original;
         return (
           <div className="flex items-center gap-1.5">
-            <span className="p-1 rounded-lg bg-amber-500/10 text-amber-400">
+            <span className="p-1 rounded-lg bg-teal-500/10 text-teal-400">
               <Dumbbell className="w-3.5 h-3.5" />
             </span>
             <div className="text-left">
@@ -382,7 +382,7 @@ export default function ComprehensiveHistory({
         <button
           id="btn-trigger-activity-form"
           onClick={() => setShowAddActivity(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+          className="bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Log Activity</span>
@@ -423,7 +423,7 @@ export default function ComprehensiveHistory({
               placeholder="Search logs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
             {searchQuery && (
               <button 
@@ -464,7 +464,7 @@ export default function ComprehensiveHistory({
                 onClick={() => setFilterType(btn.value as any)}
                 className={`py-1.5 px-2.5 rounded-xl border text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
                   isSel
-                    ? "bg-amber-600/15 border-amber-500 text-amber-400"
+                    ? "bg-teal-600/15 border-teal-500 text-teal-400"
                     : "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300"
                 }`}
               >
@@ -492,7 +492,7 @@ export default function ComprehensiveHistory({
                   setSearchQuery("");
                   setFilterType("all");
                 }}
-                className="mt-3 text-[11px] font-bold text-amber-400 hover:underline"
+                className="mt-3 text-[11px] font-bold text-teal-400 hover:underline"
               >
                 Clear all filters
               </button>
@@ -504,7 +504,7 @@ export default function ComprehensiveHistory({
               <div key={item.id} className="relative group">
                 
                 {/* Timeline node icon placeholder */}
-                <span className="absolute -left-[25.5px] top-1 w-3.5 h-3.5 rounded-full bg-neutral-950 border-2 border-neutral-800 group-hover:border-amber-500 transition-colors z-10"></span>
+                <span className="absolute -left-[25.5px] top-1 w-3.5 h-3.5 rounded-full bg-neutral-950 border-2 border-neutral-800 group-hover:border-teal-500 transition-colors z-10"></span>
                 
                 {/* Outer Card */}
                 <div className="bg-neutral-900 border border-neutral-850 p-3 rounded-2xl hover:border-neutral-700/80 transition-all shadow-sm">
@@ -551,7 +551,7 @@ export default function ComprehensiveHistory({
             {/* Header */}
             <div className="p-4 border-b border-neutral-900 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Dumbbell className="w-4 h-4 text-amber-500 animate-pulse" />
+                <Dumbbell className="w-4 h-4 text-teal-400 animate-pulse" />
                 <span className="text-xs font-black uppercase text-white tracking-widest font-mono">Log Physical Activity</span>
               </div>
               <button
@@ -658,7 +658,7 @@ export default function ComprehensiveHistory({
                       onClick={() => setActIntensity(intensity)}
                       className={`py-1.5 rounded-xl border font-bold font-mono uppercase text-[9.5px] tracking-wider transition-all text-center cursor-pointer ${
                         actIntensity === intensity
-                          ? "bg-amber-500/15 border-amber-500 text-amber-400 shadow-sm"
+                          ? "bg-teal-500/15 border-teal-500 text-teal-400 shadow-none"
                           : "bg-neutral-950 border-neutral-850 text-neutral-500 hover:text-neutral-400"
                       }`}
                     >
@@ -690,7 +690,7 @@ export default function ComprehensiveHistory({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
+                  className="flex-1 bg-teal-700 hover:bg-teal-600 text-white py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-none"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Log Activity</span>
