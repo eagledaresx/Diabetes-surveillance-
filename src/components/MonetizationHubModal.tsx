@@ -94,7 +94,7 @@ export const MonetizationHubModal: React.FC<MonetizationHubModalProps> = ({
                 </span>
               </div>
               <h2 className="text-base sm:text-lg font-bold text-white mt-1">
-                GlucoGuard Monetization & Pro Membership Hub
+                Diabetes Care &amp; Tracker Monetization &amp; Pro Membership Hub
               </h2>
               <p className="text-xs text-neutral-300 mt-0.5">
                 Turn your diabetes surveillance app into a profitable health business.
@@ -275,7 +275,7 @@ export const MonetizationHubModal: React.FC<MonetizationHubModalProps> = ({
 
                 <div className="space-y-3">
                   <div>
-                    <span className="text-[10px] font-mono uppercase text-amber-400 font-bold block">GlucoGuard Pro</span>
+                    <span className="text-[10px] font-mono uppercase text-amber-400 font-bold block">Diabetes Care &amp; Tracker Pro</span>
                     <div className="flex items-baseline gap-1 mt-1">
                       <span className="text-2xl font-black text-white font-mono">
                         {billingCycle === "annual" ? "$5.75" : "$7.99"}
@@ -407,7 +407,7 @@ export const MonetizationHubModal: React.FC<MonetizationHubModalProps> = ({
               <div>
                 <h3 className="text-sm font-bold text-white">5 High-Yield Revenue Streams for This App</h3>
                 <p className="text-[11px] text-neutral-300 mt-0.5 leading-relaxed">
-                  Chronic diabetes management is a $40B+ global digital health market. Here is the operational monetization blueprint for GlucoGuard:
+                  Chronic diabetes management is a $40B+ global digital health market. Here is the operational monetization blueprint for Diabetes Care &amp; Tracker:
                 </p>
               </div>
             </div>

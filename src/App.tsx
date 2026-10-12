@@ -112,6 +112,7 @@ import { WalkingTracker } from "./components/WalkingTracker";
 import { FamilyMonitoring } from "./components/FamilyMonitoring";
 import { DietPlanner } from "./components/DietPlanner";
 import { DoctorReport } from "./components/DoctorReport";
+import { RollingAverageChart } from "./components/RollingAverageChart";
 import { useChartBrushSync } from "./hooks/useChartBrushSync";
 import { MEDICINE_LIST, PRELOADED_MEDICINES } from "./data";
 import { GLOBAL_DIETARY_PROGRAMS } from "./data/diets";
@@ -524,7 +525,7 @@ export default function App() {
 
   // Chart visual filters
   const [chartFilter, setChartFilter] = useState<"all" | "fasting" | "post_fasting">("all");
-  const [reportChartType, setReportChartType] = useState<"trend" | "variability" | "weight" | "adherence">("trend");
+  const [reportChartType, setReportChartType] = useState<"trend" | "rolling7" | "variability" | "weight" | "adherence">("rolling7");
   const [reportTimeRange, setReportTimeRange] = useState<"7" | "30" | "90" | "365" | "custom">("30");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -2275,7 +2276,7 @@ export default function App() {
   // Account Deletion & Health Data Rights Handlers (Google Play Compliance)
   const handleExportAllData = () => {
     const backupData = {
-      app: "Diabetes Surveillance Platform",
+      app: "Diabetes Care & Tracker",
       exportedAt: new Date().toISOString(),
       profiles,
       activeProfile: profile,
@@ -2847,8 +2848,8 @@ export default function App() {
               <Activity className="w-5 h-5 text-rose-400" />
             </div>
             <div>
-              <span className="text-stone-300 text-[10px] font-mono tracking-wider font-semibold uppercase">Surveillance Console</span>
-              <h1 className="text-sm font-bold text-white tracking-tight -mt-0.5">GlucoGuard Mobile</h1>
+              <span className="text-stone-300 text-[10px] font-mono tracking-wider font-semibold uppercase">Care Console</span>
+              <h1 className="text-sm font-bold text-white tracking-tight -mt-0.5">Diabetes Care &amp; Tracker</h1>
             </div>
           </div>
           
@@ -3323,7 +3324,7 @@ export default function App() {
                               `Current Medication Compliance: ${complianceScore}%\n` +
                               `Prescribed Medications: ${profile.medications || "Metformin"}\n\n` +
                               `I would like to consult with my healthcare provider regarding my current dosing schedule and potential adjustments to improve compliance.\n\n` +
-                              `Sent via Diabetes Surveillance Platform.`
+                              `Sent via Diabetes Care & Tracker.`
                             );
                             window.location.href = `mailto:${profile.doctorEmail || ""}?subject=${subject}&body=${body}`;
                           }}
@@ -4157,54 +4158,66 @@ export default function App() {
             </div>
 
             {/* View Type Toggle Tabs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-neutral-900 border border-neutral-850 p-1 rounded-2xl select-none">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 bg-neutral-900 border border-neutral-850 p-1.5 rounded-2xl select-none">
+              <button
+                id="btn-report-chart-rolling7"
+                onClick={() => setReportChartType("rolling7")}
+                className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                  reportChartType === "rolling7"
+                    ? "bg-gradient-to-r from-cyan-900/60 to-sky-900/60 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                    : "text-cyan-400/80 hover:text-cyan-300 hover:bg-neutral-850"
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+                <span className="truncate">7-Day Rolling</span>
+              </button>
               <button
                 id="btn-report-chart-trend"
                 onClick={() => setReportChartType("trend")}
-                className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "trend"
                     ? "bg-neutral-800 text-white shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Glucose Trend</span>
+                <Activity className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Raw Trend</span>
               </button>
               <button
                 id="btn-report-chart-variability"
                 onClick={() => setReportChartType("variability")}
-                className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "variability"
                     ? "bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Variability (30D)</span>
+                <span className="truncate">Variability</span>
               </button>
               <button
                 id="btn-report-chart-weight"
                 onClick={() => setReportChartType("weight")}
-                className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "weight"
                     ? "bg-rose-500/10 text-rose-455 border border-rose-500/20 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Scale className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Weight & Glycemia</span>
+                <span className="truncate">Weight</span>
               </button>
               <button
                 id="btn-report-chart-adherence"
                 onClick={() => setReportChartType("adherence")}
-                className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "adherence"
                     ? "bg-teal-500/10 text-teal-400 border border-teal-500/20 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <CheckCircle className="w-3.5 h-3.5 shrink-0 text-teal-400" />
-                <span className="truncate">Adherence Synergy</span>
+                <span className="truncate">Adherence</span>
               </button>
             </div>
 
@@ -4326,6 +4339,11 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Tab: ROLLING 7-DAY AVERAGE WITH EXPORT SNAPSHOT */}
+            {reportChartType === "rolling7" && (
+              <RollingAverageChart readings={readings} profile={profile} />
+            )}
 
             {/* Tab 1: SURVEILLANCE TRENDLINE */}
             {reportChartType === "trend" && (

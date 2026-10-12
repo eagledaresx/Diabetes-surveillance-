@@ -14,8 +14,8 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           id: '/',
-          name: 'Remix: Diabetes Surveillance App',
-          short_name: 'DiabetesApp',
+          name: 'Diabetes Care & Tracker',
+          short_name: 'Diabetes Care',
           description: 'An Android-inspired app for monitoring fasting and post-fasting blood glucose, providing graphical reports, medication reminders, and medical guides.',
           theme_color: '#09090b',
           background_color: '#09090b',

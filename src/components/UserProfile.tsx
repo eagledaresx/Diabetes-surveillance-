@@ -907,7 +907,7 @@ export default function UserProfile({
           </div>
 
           <p className="text-[10.5px] text-neutral-350 leading-relaxed">
-            Run GlucoGuard as a dedicated, standalone Android application on your device with full home screen integration, offline local database caching, biometric security, and no browser address bar.
+            Run Diabetes Care &amp; Tracker as a dedicated, standalone Android application on your device with full home screen integration, offline local database caching, biometric security, and no browser address bar.
           </p>
 
           <button
@@ -1075,7 +1075,7 @@ export default function UserProfile({
             <div className="p-5 overflow-y-auto text-xs space-y-4 text-neutral-300 leading-relaxed font-sans">
               <div className="bg-slate-950/65 border border-slate-900/60 p-4 rounded-xl space-y-1.5">
                 <div className="text-[10px] text-sky-400 font-mono font-bold tracking-wider uppercase">Active Surveillance Shield</div>
-                <h4 className="text-sm font-extrabold text-white">Diabetes Surveillance Privacy Policy</h4>
+                <h4 className="text-sm font-extrabold text-white">Diabetes Care &amp; Tracker Privacy Policy</h4>
                 <p className="text-[10px] text-neutral-500 font-mono">Last updated: June 3, 2026</p>
               </div>
 

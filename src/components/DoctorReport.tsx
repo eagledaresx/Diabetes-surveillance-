@@ -91,7 +91,7 @@ export const DoctorReport: React.FC<DoctorReportProps> = ({
       `• *Next Appointment:* ${nextAppointment}\n` +
       `• *Clinical Notes:* "${physicianNotes}"\n` +
       `-----------------------------------\n` +
-      `Exported via Diabetes Surveillance Platform`
+      `Exported via Diabetes Care & Tracker`
     );
     const url = `https://wa.me/?text=${text}`;
     try {
@@ -273,7 +273,7 @@ export const DoctorReport: React.FC<DoctorReportProps> = ({
             <Crown className="w-4 h-4 text-amber-400 shrink-0" />
             <div>
               <span className="font-bold text-white block text-[11px]">
-                Clinical AGP Export is a GlucoGuard Pro Feature
+                Clinical AGP Export is a Diabetes Care &amp; Tracker Pro Feature
               </span>
               <p className="text-[10px] text-neutral-300">
                 Generate formatted PDF summaries for doctor appointments, EHR submission, and insurer reimbursement.
@@ -432,7 +432,7 @@ export const DoctorReport: React.FC<DoctorReportProps> = ({
                 `• Hyperglycemia Rate (>180 mg/dL): ${hyperPct}%\n` +
                 `• Current Medications: ${profile.medications || "Metformin 1000mg"}\n\n` +
                 `Physician Notes:\n"${physicianNotes}"\n\n` +
-                `Generated securely via Diabetes Surveillance App on ${new Date().toLocaleDateString()}.`
+                `Generated securely via Diabetes Care & Tracker on ${new Date().toLocaleDateString()}.`
               );
               window.location.href = `mailto:${profile.doctorEmail || ""}?subject=${subject}&body=${body}`;
             }}

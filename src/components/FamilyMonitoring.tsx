@@ -96,7 +96,7 @@ export const FamilyMonitoring: React.FC<FamilyMonitoringProps> = ({
       `• *Diabetes Type:* ${profile.diabetesType}\n` +
       `• *Target Range:* ${profile.targetFastingMin}-${profile.targetFastingMax} mg/dL\n` +
       `-----------------------------------\n` +
-      `Sent via Diabetes Surveillance Platform.`
+      `Sent via Diabetes Care & Tracker.`
     );
     const cleanPhone = phoneNum ? phoneNum.replace(/[^\d+]/g, "") : "";
     openExternalLinkSafely(`https://wa.me/${cleanPhone}?text=${text}`);

@@ -70,7 +70,7 @@ export const AiAssistantTab: React.FC<AiAssistantTabProps> = ({
     try {
       // Build context payload
       const patientBiometrics = {
-        provider: "Diabetes Surveillance Platform",
+        provider: "Diabetes Care & Tracker",
         activity: { steps: 8740, stepsGoal: 10000, activeMinutes: 45, calories: 2100 },
         sleep: { sleepScore: 84, durationSeconds: 27000, stagesSeconds: { deep: 5100, rem: 4800, light: 15000 } },
         hrv: { averageMs: 50 },

@@ -1,6 +1,6 @@
 {
 	"appId": "com.yourdomain.diabetesapp",
-	"appName": "Diabetes Surveillance",
+	"appName": "Diabetes Care & Tracker",
 	"webDir": "dist",
 	"packageClassList": []
 }
