@@ -134,6 +134,18 @@ export interface FastingReminderConfig {
   customNotes?: string;
   lastTriggeredDate?: string; // YYYY-MM-DD to avoid repeating on the same day
   snoozedUntil?: number | null; // Timestamp
+  // Advanced Wake-Up Time Window & Smart Snooze settings
+  wakeWindowEnabled?: boolean;
+  wakeWindowStart?: string; // HH:MM e.g. "06:30"
+  wakeWindowEnd?: string; // HH:MM e.g. "08:30"
+  weekendShiftMinutes?: number; // e.g. 0, 30, 60, 90
+  activeDays?: number[]; // 0 (Sun) - 6 (Sat)
+  smartSnoozeMode?: "fixed" | "adaptive_decay" | "dawn_guard";
+  snoozeIntervalMinutes?: number; // Base snooze interval in minutes (e.g. 5, 10, 15, 20, 30)
+  maxSnoozeCount?: number; // Max snoozes per morning (e.g. 3)
+  currentSnoozeCount?: number; // Snoozes used today
+  autoEscalateSound?: boolean; // Escalate chime on final snooze
+  requireFastHours?: number; // Minimum fasting hours (8, 10, 12, 14)
 }
 
 

@@ -24,7 +24,10 @@ import {
   ArrowRight,
   RefreshCw,
   Sun,
-  AlertTriangle
+  AlertTriangle,
+  SlidersHorizontal,
+  Sunrise,
+  RotateCcw
 } from "lucide-react";
 import { FastingReminderConfig, GlucoseReading } from "../types";
 import {
@@ -34,7 +37,9 @@ import {
   getNotificationPermission,
   requestNotificationPermission,
   sendNativeNotification,
-  getCountdownToAlert
+  getCountdownToAlert,
+  getEffectiveWakeWindow,
+  getSnoozeSequencePreview
 } from "../lib/notifications";
 
 interface FastingGlucoseReminderProps {
@@ -43,6 +48,7 @@ interface FastingGlucoseReminderProps {
   todayReadings: GlucoseReading[];
   onOpenLogFasting?: () => void;
   onSimulateAlert?: () => void;
+  onOpenAdvancedSettings?: () => void;
 }
 
 export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
@@ -50,11 +56,11 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
   onUpdateConfig,
   todayReadings,
   onOpenLogFasting,
-  onSimulateAlert
+  onSimulateAlert,
+  onOpenAdvancedSettings
 }) => {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [testNotificationSent, setTestNotificationSent] = useState(false);
-  const [copiedTime, setCopiedTime] = useState(false);
 
   useEffect(() => {
     setPermission(getNotificationPermission());
@@ -62,10 +68,12 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
 
   const { preAlertTime, formattedTarget, formattedAlert } = calculatePreAlertTime(
     config.targetTime,
-    config.leadMinutes
+    config.leadMinutes || 15
   );
 
   const countdown = getCountdownToAlert(preAlertTime);
+  const wakeWindow = getEffectiveWakeWindow(config);
+  const snoozeSequence = getSnoozeSequencePreview(config);
 
   // Check if fasting glucose has already been logged today
   const todaysFastingReading = todayReadings.find((r) => r.type === "fasting");
@@ -76,7 +84,7 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
     if (res === "granted") {
       onUpdateConfig({ ...config, browserNotificationsEnabled: true });
       await sendNativeNotification("🌅 Notifications Enabled!", {
-        body: `You will be alerted at ${formattedAlert} (15 mins before your ${formattedTarget} fasting check).`
+        body: `You will be alerted at ${formattedAlert} (${config.leadMinutes || 15} mins before your ${formattedTarget} fasting check).`
       });
     }
   };
@@ -90,7 +98,7 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
     }
 
     if (config.browserNotificationsEnabled && permission === "granted") {
-      await sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
+      await sendNativeNotification(`🌅 Fasting Glucose Check in ${config.leadMinutes || 15} Minutes`, {
         body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, check your fasting status, and prep your test strip.`,
         data: { url: window.location.href }
       });
@@ -126,12 +134,12 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
       <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/40 via-neutral-900 to-neutral-950 border border-amber-500/30 space-y-3.5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 <Sun className="w-4 h-4" />
               </span>
               <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold">
-                15-Min Pre-Check Alert System
+                {config.leadMinutes || 15}-Min Pre-Check Alert System
               </span>
               <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
                 Pro Feature
@@ -141,7 +149,7 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
               Morning Fasting Glucose Pre-Alert
             </h3>
             <p className="text-[11px] text-neutral-300 leading-relaxed">
-              Sends an advance push notification and alarm <strong className="text-amber-300">15 minutes before</strong> your scheduled morning check, allowing adequate time for proper handwashing, resting, and preparing your glucometer.
+              Sends an advance push notification and alarm <strong className="text-amber-300">{config.leadMinutes || 15} minutes before</strong> your scheduled morning check, aligned with your wake-up window and smart snooze cadence.
             </p>
           </div>
 
@@ -172,13 +180,42 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
           </div>
           <div>
             <span className="text-[9px] font-mono text-amber-400 font-bold uppercase block">Lead Window</span>
-            <span className="text-sm font-bold text-amber-300 font-mono">-15 min</span>
+            <span className="text-sm font-bold text-amber-300 font-mono">-{config.leadMinutes || 15} min</span>
             <span className="text-[9px] text-neutral-500 block">Preparation buffer</span>
           </div>
           <div>
             <span className="text-[9px] font-mono text-cyan-400 font-bold uppercase block">🔔 Alert Fires</span>
             <span className="text-sm font-bold text-cyan-300 font-mono">{formattedAlert}</span>
             <span className="text-[9px] text-neutral-500 block">{countdown}</span>
+          </div>
+        </div>
+
+        {/* Wake-Up Window & Smart Snooze Overview Card */}
+        <div className="p-3 bg-neutral-950/90 border border-purple-500/30 rounded-xl space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sunrise className="w-4 h-4 text-amber-400 shrink-0" />
+              <div>
+                <span className="text-[11px] font-bold text-white block">
+                  Wake-Up Window: {wakeWindow.formattedStart} – {wakeWindow.formattedEnd}
+                </span>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  Smart Snooze ({config.smartSnoozeMode === "adaptive_decay" ? "Adaptive Decay" : config.smartSnoozeMode === "dawn_guard" ? "Dawn Cortisol Guard" : "Fixed"}): {snoozeSequence.join("m → ")}m ({config.maxSnoozeCount || 3}x max)
+                </span>
+              </div>
+            </div>
+
+            {onOpenAdvancedSettings && (
+              <button
+                type="button"
+                id="btn-open-advanced-fasting-modal"
+                onClick={onOpenAdvancedSettings}
+                className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10.5px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-purple-300" />
+                <span>Advanced Wake &amp; Snooze</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -224,7 +261,17 @@ export const FastingGlucoseReminder: React.FC<FastingGlucoseReminderProps> = ({
               Schedule Morning Fasting Time
             </h4>
           </div>
-          <span className="text-[10px] text-neutral-400 font-mono">24h format</span>
+          {onOpenAdvancedSettings ? (
+            <button
+              type="button"
+              onClick={onOpenAdvancedSettings}
+              className="text-[10px] text-amber-400 hover:text-amber-300 font-mono underline cursor-pointer"
+            >
+              Wake Window &amp; Smart Snooze →
+            </button>
+          ) : (
+            <span className="text-[10px] text-neutral-400 font-mono">24h format</span>
+          )}
         </div>
 
         {/* Custom time picker */}

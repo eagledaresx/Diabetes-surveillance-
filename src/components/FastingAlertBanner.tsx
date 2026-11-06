@@ -9,14 +9,18 @@ import {
   Clock,
   CheckCircle2,
   X,
-  Droplet,
-  ShieldCheck,
+  SlidersHorizontal,
   ArrowRight,
-  BellRing,
-  RotateCcw
+  RotateCcw,
+  Sparkles,
+  Sunrise
 } from "lucide-react";
 import { FastingReminderConfig } from "../types";
-import { calculatePreAlertTime } from "../lib/notifications";
+import {
+  calculatePreAlertTime,
+  calculateNextSmartSnoozeMinutes,
+  getEffectiveWakeWindow
+} from "../lib/notifications";
 
 interface FastingAlertBannerProps {
   config: FastingReminderConfig;
@@ -24,6 +28,7 @@ interface FastingAlertBannerProps {
   onClose: () => void;
   onSnooze: (minutes: number) => void;
   onLogFastingNow: () => void;
+  onOpenAdvancedSettings?: () => void;
 }
 
 export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
@@ -31,16 +36,22 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
   isOpen,
   onClose,
   onSnooze,
-  onLogFastingNow
+  onLogFastingNow,
+  onOpenAdvancedSettings
 }) => {
+  const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
+
   if (!isOpen) return null;
 
+  const leadMins = config.leadMinutes || 15;
   const { formattedTarget, formattedAlert } = calculatePreAlertTime(
     config.targetTime,
-    config.leadMinutes
+    leadMins
   );
 
-  const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
+  const wakeWindow = getEffectiveWakeWindow(config);
+  const smartSnooze = calculateNextSmartSnoozeMinutes(config);
+  const fastHours = config.requireFastHours || 8;
 
   const toggleStep = (stepIdx: number) => {
     setCheckedSteps((prev) => ({
@@ -52,7 +63,7 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
   const steps = [
     { id: 1, text: "Wash and dry hands thoroughly with warm water (removes skin sugars)." },
     { id: 2, text: "Sit calmly for 5 minutes to stabilize morning cortisol and baseline pulse." },
-    { id: 3, text: "Confirm 8h strict water-only fast (no tea, milk, or snacks)." },
+    { id: 3, text: `Confirm ${fastHours}h strict water-only fast (no tea, milk, or snacks).` },
     { id: 4, text: "Insert fresh test strip into glucometer and cock sterile lancet." }
   ];
 
@@ -66,16 +77,16 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
               <Sun className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase tracking-wider">
-                  15-Min Advance Alert
+                  {leadMins}-Min Advance Alert
                 </span>
-                <span className="text-[10px] font-mono text-neutral-400">
+                <span className="text-[10px] font-mono text-neutral-300">
                   {formattedAlert}
                 </span>
               </div>
               <h3 className="text-base font-bold text-white mt-1">
-                Morning Fasting Check in 15 Minutes
+                Morning Fasting Check in {leadMins} Minutes
               </h3>
               <p className="text-xs text-amber-200/90 mt-0.5">
                 Target scheduled check at <strong className="text-white font-mono">{formattedTarget}</strong>
@@ -83,20 +94,47 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {onOpenAdvancedSettings && (
+              <button
+                type="button"
+                id="btn-banner-open-advanced-fasting"
+                onClick={onOpenAdvancedSettings}
+                title="Configure Wake-Up Window & Smart Snooze"
+                className="p-1.5 text-amber-300 hover:text-white rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors cursor-pointer"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
-        <div className="p-4 space-y-4 text-xs">
-          <p className="text-neutral-300 leading-relaxed text-[11.5px]">
-            Good morning! Your scheduled morning fasting blood glucose test is in 15 minutes. Take this window to complete the clinical readiness steps:
-          </p>
+        <div className="p-4 space-y-3.5 text-xs">
+          {/* Wake-Up Window & Smart Snooze Status Bar */}
+          {config.wakeWindowEnabled !== false && (
+            <div className="p-2.5 bg-neutral-950 border border-neutral-800 rounded-2xl flex items-center justify-between gap-2 text-[10.5px]">
+              <div className="flex items-center gap-1.5 text-neutral-300">
+                <Sunrise className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>
+                  Wake Window:{" "}
+                  <strong className="text-amber-300 font-mono">
+                    {wakeWindow.formattedStart} – {wakeWindow.formattedEnd}
+                  </strong>
+                </span>
+              </div>
+              <span className="text-[9.5px] font-mono px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                {smartSnooze.modeLabel}
+              </span>
+            </div>
+          )}
 
           {/* Checklist */}
           <div className="space-y-2 bg-neutral-950 p-3 rounded-2xl border border-neutral-800">
@@ -141,6 +179,46 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
             </div>
           )}
 
+          {/* Smart Snooze Panel */}
+          <div className="p-3 bg-neutral-950 border border-purple-500/30 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-purple-400" />
+                Smart Snooze Interval ({smartSnooze.remainingSnoozes}/{smartSnooze.maxSnoozes} left)
+              </span>
+              {onOpenAdvancedSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenAdvancedSettings}
+                  className="text-[9.5px] font-mono text-amber-300 hover:text-amber-200 underline cursor-pointer"
+                >
+                  Customize
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] text-neutral-400 leading-snug">
+              {smartSnooze.reason}
+            </p>
+            {smartSnooze.remainingSnoozes > 0 && (
+              <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+                {[3, 5, 10, 15].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => onSnooze(mins)}
+                    className={`py-1.5 rounded-lg font-mono text-[10.5px] font-bold border transition-all cursor-pointer ${
+                      smartSnooze.nextMinutes === mins
+                        ? "bg-purple-500/25 text-purple-200 border-purple-400"
+                        : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white"
+                    }`}
+                  >
+                    +{mins}m
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <div className="space-y-2 pt-1">
             <button
@@ -156,18 +234,27 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
             <div className="flex gap-2">
               <button
                 type="button"
-                id="btn-alert-snooze-5"
-                onClick={() => onSnooze(5)}
-                className="flex-1 py-2.5 px-3 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-bold text-xs rounded-xl border border-neutral-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                id="btn-alert-snooze-smart"
+                disabled={smartSnooze.remainingSnoozes <= 0}
+                onClick={() => onSnooze(smartSnooze.nextMinutes)}
+                className={`flex-1 py-2.5 px-3 font-bold text-xs rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
+                  smartSnooze.remainingSnoozes > 0
+                    ? "bg-purple-950/50 hover:bg-purple-900/60 text-purple-200 border-purple-500/40 cursor-pointer"
+                    : "bg-neutral-900 text-neutral-500 border-neutral-800 cursor-not-allowed"
+                }`}
               >
-                <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
-                <span>Snooze 5 Min</span>
+                <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
+                <span>
+                  {smartSnooze.remainingSnoozes > 0
+                    ? `Smart Snooze (${smartSnooze.nextMinutes} Min)`
+                    : "Max Snoozes Used"}
+                </span>
               </button>
               <button
                 type="button"
                 id="btn-alert-dismiss"
                 onClick={onClose}
-                className="flex-1 py-2.5 px-3 bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-white font-bold text-xs rounded-xl border border-neutral-750 transition-colors cursor-pointer text-center"
+                className="py-2.5 px-4 bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-white font-bold text-xs rounded-xl border border-neutral-750 transition-colors cursor-pointer text-center"
               >
                 Dismiss
               </button>
@@ -178,3 +265,4 @@ export const FastingAlertBanner: React.FC<FastingAlertBannerProps> = ({
     </div>
   );
 };
+

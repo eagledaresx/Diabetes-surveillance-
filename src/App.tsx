@@ -97,6 +97,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { GlucoseReading, MedicationReminder, MedicationLog, MedicineDetails, UserProfile as UserProfileType, FoodLog, PrescribedMedication, ActivityLog, FastingReminderConfig } from "./types";
 import { FastingGlucoseReminder } from "./components/FastingGlucoseReminder";
 import { FastingAlertBanner } from "./components/FastingAlertBanner";
+import { AdvancedFastingAlertModal } from "./components/AdvancedFastingAlertModal";
 import { MonetizationHubModal } from "./components/MonetizationHubModal";
 import {
   DEFAULT_FASTING_REMINDER_CONFIG,
@@ -104,7 +105,8 @@ import {
   isAlertTimeNow,
   playNotificationChime,
   triggerHaptic,
-  sendNativeNotification
+  sendNativeNotification,
+  getEffectiveWakeWindow
 } from "./lib/notifications";
 import ComprehensiveHistory from "./components/ComprehensiveHistory";
 import { WalkingTracker } from "./components/WalkingTracker";
@@ -442,6 +444,7 @@ export default function App() {
   const [remindersSubTab, setRemindersSubTab] = useState<"checklist" | "fasting" | "prescriptions" | "checker">("checklist");
   const [fastingReminderConfig, setFastingReminderConfig] = useState<FastingReminderConfig>(DEFAULT_FASTING_REMINDER_CONFIG);
   const [showFastingAlertModal, setShowFastingAlertModal] = useState(false);
+  const [showAdvancedFastingModal, setShowAdvancedFastingModal] = useState(false);
   const [showMonetizationModal, setShowMonetizationModal] = useState(false);
   const [newPresMedForm, setNewPresMedForm] = useState(false);
   const [presMedName, setPresMedName] = useState("");
@@ -777,8 +780,10 @@ export default function App() {
   };
 
   const handleSnoozeFastingAlert = (minutes: number) => {
-    const updated = {
+    const nextSnoozeCount = (fastingReminderConfig.currentSnoozeCount || 0) + 1;
+    const updated: FastingReminderConfig = {
       ...fastingReminderConfig,
+      currentSnoozeCount: nextSnoozeCount,
       snoozedUntil: Date.now() + minutes * 60 * 1000
     };
     handleUpdateFastingConfig(updated);
@@ -803,17 +808,45 @@ export default function App() {
     }, 150);
   };
 
-  // 15-Minute Morning Fasting Glucose Alert Background Check Ticker
+  // Morning Fasting Glucose Alert Background Check Ticker (with Wake-Up Window & Smart Snooze support)
   useEffect(() => {
     const checkFastingAlert = async () => {
       if (!fastingReminderConfig.enabled) return;
 
+      const now = new Date();
+      const activeDays = fastingReminderConfig.activeDays || [0, 1, 2, 3, 4, 5, 6];
+      if (!activeDays.includes(now.getDay())) return;
+
       // If currently snoozed, check if snooze window has expired
-      if (fastingReminderConfig.snoozedUntil && Date.now() < fastingReminderConfig.snoozedUntil) {
+      if (fastingReminderConfig.snoozedUntil) {
+        if (Date.now() < fastingReminderConfig.snoozedUntil) {
+          return;
+        }
+        // Snooze window expired -> fire escalated alert!
+        const clearedSnooze = {
+          ...fastingReminderConfig,
+          snoozedUntil: null
+        };
+        setFastingReminderConfig(clearedSnooze);
+        localStorage.setItem("dia_fasting_reminder_config", JSON.stringify(clearedSnooze));
+
+        if (fastingReminderConfig.soundEnabled) {
+          playNotificationChime();
+          if (fastingReminderConfig.autoEscalateSound) {
+            setTimeout(() => playNotificationChime(), 600);
+          }
+        }
+        if (fastingReminderConfig.vibrationEnabled) {
+          triggerHaptic(
+            fastingReminderConfig.autoEscalateSound
+              ? [300, 100, 300, 100, 450]
+              : [200, 100, 200, 100, 300]
+          );
+        }
+        setShowFastingAlertModal(true);
         return;
       }
 
-      const now = new Date();
       const todayStamp = now.toISOString().split("T")[0];
 
       // Avoid duplicate alert triggers for today unless explicitly testing
@@ -821,15 +854,17 @@ export default function App() {
         return;
       }
 
+      const effective = getEffectiveWakeWindow(fastingReminderConfig, now);
       const { preAlertTime, formattedTarget } = calculatePreAlertTime(
-        fastingReminderConfig.targetTime,
-        fastingReminderConfig.leadMinutes
+        effective.effectiveTarget,
+        fastingReminderConfig.leadMinutes || 15
       );
 
       if (isAlertTimeNow(preAlertTime)) {
-        const updatedConfig = {
+        const updatedConfig: FastingReminderConfig = {
           ...fastingReminderConfig,
           lastTriggeredDate: todayStamp,
+          currentSnoozeCount: 0,
           snoozedUntil: null
         };
         setFastingReminderConfig(updatedConfig);
@@ -844,10 +879,13 @@ export default function App() {
         }
 
         if (fastingReminderConfig.browserNotificationsEnabled) {
-          await sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
-            body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`,
-            tag: "morning-fasting-glucose-precheck"
-          });
+          await sendNativeNotification(
+            `🌅 Fasting Glucose Check in ${fastingReminderConfig.leadMinutes || 15} Minutes`,
+            {
+              body: `Scheduled check at ${formattedTarget} (Wake Window ${effective.formattedStart}–${effective.formattedEnd}). Wash hands with warm water and rest 5 mins.`,
+              tag: "morning-fasting-glucose-precheck"
+            }
+          );
         }
 
         setShowFastingAlertModal(true);
@@ -907,7 +945,9 @@ export default function App() {
     showGlucometerModal,
     showGoalsModal,
     showWeeklyReviewModal,
-    showMonetizationModal
+    showMonetizationModal,
+    showFastingAlertModal,
+    showAdvancedFastingModal
   ]);
 
   // Auto-lock when waking from background or switching away if Biometric Security is enabled
@@ -5886,22 +5926,34 @@ export default function App() {
                   <span>Add Pill</span>
                 </button>
               ) : remindersSubTab === "fasting" ? (
-                <button
-                  id="btn-test-fasting-header"
-                  onClick={() => {
-                    if (fastingReminderConfig.soundEnabled) playNotificationChime();
-                    if (fastingReminderConfig.vibrationEnabled) triggerHaptic([200, 100, 200, 100, 300]);
-                    const { formattedTarget } = calculatePreAlertTime(fastingReminderConfig.targetTime, fastingReminderConfig.leadMinutes);
-                    sendNativeNotification("🌅 Fasting Glucose Check in 15 Minutes", {
-                      body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`
-                    });
-                    setShowFastingAlertModal(true);
-                  }}
-                  className="bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Test Pre-Alert</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    id="btn-open-adv-fasting-header"
+                    type="button"
+                    onClick={() => setShowAdvancedFastingModal(true)}
+                    className="bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/40 px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono text-purple-300 flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Wake &amp; Snooze</span>
+                  </button>
+                  <button
+                    id="btn-test-fasting-header"
+                    type="button"
+                    onClick={() => {
+                      if (fastingReminderConfig.soundEnabled) playNotificationChime();
+                      if (fastingReminderConfig.vibrationEnabled) triggerHaptic([200, 100, 200, 100, 300]);
+                      const { formattedTarget } = calculatePreAlertTime(fastingReminderConfig.targetTime, fastingReminderConfig.leadMinutes);
+                      sendNativeNotification(`🌅 Fasting Glucose Check in ${fastingReminderConfig.leadMinutes || 15} Minutes`, {
+                        body: `Scheduled check at ${formattedTarget}. Wash hands with warm water, rest for 5 mins, and prep your test strip.`
+                      });
+                      setShowFastingAlertModal(true);
+                    }}
+                    className="bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono text-amber-300 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Test Pre-Alert</span>
+                  </button>
+                </div>
               ) : remindersSubTab === "prescriptions" ? (
                 <button
                   id="btn-open-pres-med-form"
@@ -6053,6 +6105,16 @@ export default function App() {
                           >
                             <Zap className="w-3 h-3 text-amber-400" />
                             <span>Test Alert</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            id="btn-open-advanced-fasting-bento"
+                            onClick={() => setShowAdvancedFastingModal(true)}
+                            className="text-[10px] font-bold text-purple-300 hover:text-white bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/35 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <SlidersHorizontal className="w-3 h-3 text-purple-400" />
+                            <span>Wake &amp; Snooze</span>
                           </button>
 
                           <button
@@ -6455,6 +6517,7 @@ export default function App() {
                 todayReadings={readings.filter((r) => r.date === currentStamp)}
                 onOpenLogFasting={handleLogFastingFromReminder}
                 onSimulateAlert={() => setShowFastingAlertModal(true)}
+                onOpenAdvancedSettings={() => setShowAdvancedFastingModal(true)}
               />
             )}
 
@@ -7525,6 +7588,23 @@ export default function App() {
         onClose={() => setShowFastingAlertModal(false)}
         onSnooze={handleSnoozeFastingAlert}
         onLogFastingNow={handleLogFastingFromReminder}
+        onOpenAdvancedSettings={() => {
+          setShowFastingAlertModal(false);
+          setShowAdvancedFastingModal(true);
+        }}
+      />
+
+      {/* ADVANCED FASTING WAKE-UP WINDOW & SMART SNOOZE CONFIGURATION MODAL */}
+      <AdvancedFastingAlertModal
+        isOpen={showAdvancedFastingModal}
+        onClose={() => setShowAdvancedFastingModal(false)}
+        config={fastingReminderConfig}
+        onSaveConfig={handleUpdateFastingConfig}
+        onTestAlert={(previewCfg) => {
+          handleUpdateFastingConfig(previewCfg);
+          setShowAdvancedFastingModal(false);
+          setShowFastingAlertModal(true);
+        }}
       />
 
       {/* MONETIZATION & PRO MEMBERSHIP HUB MODAL */}
