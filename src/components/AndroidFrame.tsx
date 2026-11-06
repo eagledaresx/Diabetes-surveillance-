@@ -37,31 +37,31 @@ export default function AndroidFrame({
 
   return (
     <div 
-      className={`min-h-screen flex items-center justify-center font-sans transition-colors duration-300 ${
-        isFullscreen ? "p-0 w-full" : "p-0 md:p-6"
+      className={`h-dvh max-h-dvh w-full max-w-full flex items-center justify-center overflow-hidden font-sans transition-colors duration-300 ${
+        isFullscreen ? "p-0" : "p-0 md:p-2 lg:p-3"
       }`} 
       style={{ backgroundColor: "var(--bg-frame, #020617)" }}
     >
-      {/* Phone Shell Case: expands to 100% when isFullscreen is true */}
+      {/* Phone Shell Case: expands to 100% when isFullscreen is true, otherwise fits cleanly within viewport */}
       <div 
         className={`w-full relative flex flex-col overflow-hidden transition-all duration-300 ${
           isFullscreen 
-            ? "max-w-none h-screen rounded-none border-0 shadow-none" 
-            : "max-w-[460px] md:h-[880px] h-screen md:rounded-[48px] md:border-8 md:border-neutral-800 md:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)]"
+            ? "max-w-none h-full max-h-full rounded-none border-0 shadow-none" 
+            : "max-w-[480px] h-full max-h-full md:max-h-[calc(100dvh-1.5rem)] md:rounded-[36px] md:border-[5px] md:border-neutral-800 md:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)]"
         }`} 
         style={{ backgroundColor: "var(--bg-shelf, #121214)" }}
       >
         
         {/* Dynamic Notch / Camera Hole on desktop (only in chassis mode) */}
         {!isFullscreen && (
-          <div className="hidden md:block absolute top-3 left-1/2 -translate-x-1/2 w-32 h-6 bg-neutral-950/80 rounded-full z-30 flex items-center justify-center border border-white/5">
-            <div className="w-3.5 h-3.5 bg-neutral-950 rounded-full border-2 border-neutral-800 mr-8"></div>
+          <div className="hidden md:flex absolute top-1.5 left-1/2 -translate-x-1/2 w-24 h-4 bg-neutral-950/80 rounded-full z-30 items-center justify-center border border-white/5 pointer-events-none">
+            <div className="w-2.5 h-2.5 bg-neutral-950 rounded-full border-2 border-neutral-800 mr-5"></div>
             <div className="w-1.5 h-1.5 bg-blue-900/50 rounded-full"></div>
           </div>
         )}
 
         {/* Android Status Bar */}
-        <div className="text-neutral-300 px-4 sm:px-6 pt-3 pb-2 flex justify-between items-center text-xs font-medium tracking-wide border-b border-white/5 select-none z-20 shrink-0 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
+        <div className="text-neutral-300 px-3 sm:px-4 pt-2 pb-1.5 flex justify-between items-center text-xs font-medium tracking-wide border-b border-white/5 select-none z-20 shrink-0 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
           <div className="flex items-center gap-2">
             <span>{currentTime}</span>
             {onOpenAndroidModal && (
@@ -101,19 +101,19 @@ export default function AndroidFrame({
         </div>
 
         {/* Live App Screens Inside Phone Structure */}
-        <div className="flex-1 overflow-hidden bg-neutral-900 text-neutral-100 flex flex-col relative transition-colors duration-300">
+        <div className="flex-1 min-h-0 w-full overflow-hidden bg-neutral-900 text-neutral-100 flex flex-col relative transition-colors duration-300">
           {children}
         </div>
 
         {/* Soft Touch Navigation Keys at bottom of Screen */}
-        <div className="px-10 py-3 flex justify-between items-center text-neutral-500 border-t border-white/5 select-none shrink-0 z-20 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
+        <div className="px-10 py-1.5 flex justify-between items-center text-neutral-500 border-t border-white/5 select-none shrink-0 z-20 transition-colors duration-300" style={{ backgroundColor: "var(--bg-shelf, #121214)" }}>
           <button 
             id="android-nav-back"
             onClick={onBackPress}
             className="p-1 hover:text-neutral-300 transition-colors cursor-pointer"
             title="Go Back"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5" />
           </button>
           
           <button 
@@ -122,7 +122,7 @@ export default function AndroidFrame({
             className="p-1 hover:text-neutral-300 transition-colors cursor-pointer"
             title="Home Screen"
           >
-            <Circle className="w-4 h-4 fill-current text-neutral-400" />
+            <Circle className="w-3.5 h-3.5 fill-current text-neutral-400" />
           </button>
           
           <button 
@@ -131,13 +131,13 @@ export default function AndroidFrame({
             className="p-1 hover:text-neutral-300 transition-colors cursor-pointer"
             title="Android App Options"
           >
-            <Square className="w-4 h-4 text-neutral-500 hover:text-neutral-300" />
+            <Square className="w-3.5 h-3.5 text-neutral-500 hover:text-neutral-300" />
           </button>
         </div>
 
         {/* Decorative Home Indicator Bar for modern touch gesture */}
         {!isFullscreen && (
-          <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-neutral-600 rounded-full z-30"></div>
+          <div className="hidden md:block absolute bottom-1 left-1/2 -translate-x-1/2 w-28 h-1 bg-neutral-600 rounded-full z-30 pointer-events-none"></div>
         )}
       </div>
     </div>

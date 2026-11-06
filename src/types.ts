@@ -59,7 +59,7 @@ export interface UserProfile {
   targetFastingMax: number; // Default 100 mg/dL
   targetPostMin: number;    // Default 100 mg/dL
   targetPostMax: number;    // Default 140 mg/dL
-  theme?: "matte-slate" | "matte-terracotta" | "matte-steel" | "matte-chalk-light" | "dark" | "high-contrast-light";
+  theme?: "matte-slate" | "matte-terracotta" | "matte-steel" | "matte-chalk-light" | "high-contrast-light" | "clinical-mint-light" | "dark";
   targetHbA1c?: number; // Target HbA1c in %, e.g. 6.5
   targetTimeInRange?: number; // Target Time In Range %, e.g. 75
   targetDailyLogs?: number; // Target number of daily glucose logs, e.g. 3
@@ -84,6 +84,7 @@ export interface UserProfile {
   membershipTier?: "free" | "pro" | "caregiver_plus";
   membershipExpiry?: string;
   trialActive?: boolean;
+  language?: string;
 }
 
 export interface FoodLog {

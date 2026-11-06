@@ -107,12 +107,16 @@ import {
   sendNativeNotification
 } from "./lib/notifications";
 import ComprehensiveHistory from "./components/ComprehensiveHistory";
-import { AiAssistantTab } from "./components/AiAssistantTab";
 import { WalkingTracker } from "./components/WalkingTracker";
 import { FamilyMonitoring } from "./components/FamilyMonitoring";
 import { DietPlanner } from "./components/DietPlanner";
 import { DoctorReport } from "./components/DoctorReport";
 import { RollingAverageChart } from "./components/RollingAverageChart";
+import { LanguageSelectorTab } from "./components/LanguageSelectorTab";
+import { LanguageDropdownMenu } from "./components/LanguageDropdownMenu";
+import { ThemeSelectorTab, getColorSchemeById, SIX_COLOR_SCHEMES, ColorSchemeId } from "./components/ThemeSelectorTab";
+import { getLanguageByCode, INTERNATIONAL_LANGUAGES } from "./data/languages";
+import { applyGlobalInterfaceTranslation, translatePhrase } from "./lib/globalInterfaceTranslator";
 import { useChartBrushSync } from "./hooks/useChartBrushSync";
 import { MEDICINE_LIST, PRELOADED_MEDICINES } from "./data";
 import { GLOBAL_DIETARY_PROGRAMS } from "./data/diets";
@@ -398,7 +402,7 @@ function computeVariabilityData(readingsList: GlucoseReading[]): any[] {
   });
 }
 
-type AppTab = "dashboard" | "reports" | "reminders" | "handbook" | "profile" | "history" | "diet" | "walking" | "assistant" | "family";
+type AppTab = "dashboard" | "reports" | "reminders" | "handbook" | "profile" | "history" | "diet" | "walking" | "family" | "languages" | "themes";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>("dashboard");
@@ -861,6 +865,51 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", activeTheme);
   }, [profile.theme]);
 
+  // Synchronize total interface translation across all menus, sub-menus, cards, and modals when language changes
+  useEffect(() => {
+    const langCode = profile.language || "en";
+    const langMeta = getLanguageByCode(langCode);
+    document.documentElement.lang = langMeta.bcp47 || langCode;
+    document.documentElement.dir = langMeta.dir || "ltr";
+
+    // Apply immediate translation pass
+    applyGlobalInterfaceTranslation(langCode, document.body);
+    const timer = window.setTimeout(() => {
+      applyGlobalInterfaceTranslation(langCode, document.body);
+    }, 60);
+
+    // Observe dynamic DOM additions (modals, sub-menus, dropdowns) to translate immediately
+    let debounceTimer: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        applyGlobalInterfaceTranslation(langCode, document.body);
+      }, 45);
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    return () => {
+      window.clearTimeout(timer);
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      observer.disconnect();
+    };
+  }, [
+    profile.language,
+    activeTab,
+    dashboardSubTab,
+    remindersSubTab,
+    reportChartType,
+    educationSubTab,
+    showGlucometerModal,
+    showGoalsModal,
+    showWeeklyReviewModal,
+    showMonetizationModal
+  ]);
+
   // Auto-lock when waking from background or switching away if Biometric Security is enabled
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1091,6 +1140,46 @@ export default function App() {
   const handleUpdateProfile = (updatedProfile: UserProfileType) => {
     setProfile(updatedProfile);
     localStorage.setItem("dia_profile", JSON.stringify(updatedProfile));
+  };
+
+  // International Language Selection & Localization Engine
+  const activeLanguage = getLanguageByCode(profile.language || "en");
+  const t = activeLanguage.translations;
+  const currentLangCode = profile.language || "en";
+  const tr = (phrase: string) => translatePhrase(phrase, currentLangCode);
+
+  const handleSelectLanguage = (langCode: string) => {
+    const updatedProfile = { ...profile, language: langCode };
+    setProfile(updatedProfile);
+    localStorage.setItem("dia_profile", JSON.stringify(updatedProfile));
+    if (profiles.length > 0) {
+      const updatedProfiles = profiles.map(p => (p.id === updatedProfile.id ? updatedProfile : p));
+      setProfiles(updatedProfiles);
+      localStorage.setItem("dia_profiles", JSON.stringify(updatedProfiles));
+    }
+    if (typeof document !== "undefined") {
+      const langObj = getLanguageByCode(langCode);
+      document.documentElement.lang = langObj.bcp47 || langCode;
+      document.documentElement.dir = langObj.dir || "ltr";
+      applyGlobalInterfaceTranslation(langCode, document.body);
+    }
+  };
+
+  // 6 Color Schemes (3 Dark + 3 Light) Selection Handler
+  const activeColorScheme = getColorSchemeById(profile.theme);
+
+  const handleSelectTheme = (themeId: ColorSchemeId) => {
+    const updatedProfile = { ...profile, theme: themeId };
+    setProfile(updatedProfile);
+    localStorage.setItem("dia_profile", JSON.stringify(updatedProfile));
+    if (profiles.length > 0) {
+      const updatedProfiles = profiles.map(p => (p.id === updatedProfile.id ? updatedProfile : p));
+      setProfiles(updatedProfiles);
+      localStorage.setItem("dia_profiles", JSON.stringify(updatedProfiles));
+    }
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", themeId);
+    }
   };
 
   // Full clinical backup restore handler
@@ -2839,53 +2928,63 @@ export default function App() {
       <OfflineIndicator />
       
       {/* Dynamic Screen Contents mapping of Tab selections */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0 w-full">
         
         {/* Upper Screen Title Panel with quick settings shortcut */}
-        <header className="bg-neutral-900 border-b border-neutral-800 px-4 py-3 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-rose-500/10 rounded-lg">
-              <Activity className="w-5 h-5 text-rose-400" />
+        <header className="bg-neutral-900 border-b border-neutral-800 px-3 py-2.5 flex justify-between items-center gap-2 shrink-0 w-full">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="p-1.5 bg-rose-500/10 rounded-lg shrink-0">
+              <Activity className="w-4 h-4 text-rose-400" />
             </div>
-            <div>
-              <span className="text-stone-300 text-[10px] font-mono tracking-wider font-semibold uppercase">Care Console</span>
-              <h1 className="text-sm font-bold text-white tracking-tight -mt-0.5">Diabetes Care &amp; Tracker</h1>
+            <div className="min-w-0">
+              <span className="block text-stone-300 text-[9px] font-mono tracking-wider font-semibold uppercase truncate">
+                {t.careConsole}
+              </span>
+              <h1 className="text-xs sm:text-sm font-bold text-white tracking-tight -mt-0.5 truncate">
+                {t.appName}
+              </h1>
             </div>
           </div>
           
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             <PWAInstallButton onOpenAndroidModal={() => setShowAndroidModal(true)} />
+
+            {/* App Language Dropdown Menu */}
+            <LanguageDropdownMenu
+              selectedCode={profile.language || "en"}
+              onSelectLanguage={handleSelectLanguage}
+              onOpenLanguagesTab={() => changeTab("languages")}
+            />
 
             <button
               id="header-theme-toggle-btn"
-              title="Switch Matte Palette"
+              title={`Theme: ${activeColorScheme.name} — Open 6 Color Schemes (3 Dark & 3 Light Themes)`}
               onClick={() => {
-                const themes: ("matte-slate" | "matte-terracotta" | "matte-steel" | "matte-chalk-light")[] = [
-                  "matte-slate",
-                  "matte-terracotta",
-                  "matte-steel",
-                  "matte-chalk-light"
-                ];
-                const currentIndex = themes.indexOf(profile.theme as any);
-                const nextTheme = themes[(currentIndex + 1) % themes.length];
-                const updated = { ...profile, theme: nextTheme };
-                setProfile(updated);
-                localStorage.setItem("dia_profile", JSON.stringify(updated));
-                document.documentElement.setAttribute("data-theme", nextTheme);
+                if (activeTab === "themes") {
+                  const allIds = SIX_COLOR_SCHEMES.map(s => s.id);
+                  const currentIndex = allIds.indexOf(activeColorScheme.id);
+                  const nextTheme = allIds[(currentIndex + 1) % allIds.length];
+                  handleSelectTheme(nextTheme);
+                } else {
+                  changeTab("themes");
+                }
               }}
-              className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-200 bg-neutral-800/80 hover:bg-neutral-800 px-2 py-1.5 rounded-xl border border-neutral-700/60 font-mono transition-all cursor-pointer"
+              className={`flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-xl border font-mono font-bold transition-all cursor-pointer shrink-0 ${
+                activeTab === "themes"
+                  ? "bg-purple-500/20 text-purple-300 border-purple-400/50"
+                  : "text-neutral-300 hover:text-white bg-neutral-800/80 hover:bg-neutral-800 border-neutral-700/60"
+              }`}
             >
-              <Palette className="w-3.5 h-3.5 text-neutral-400" />
-              <span className="hidden sm:inline capitalize">
-                {profile.theme === "matte-terracotta" ? "Terracotta" : profile.theme === "matte-steel" ? "Steel" : profile.theme === "matte-chalk-light" ? "Chalk" : "Slate"}
-              </span>
+              <Palette className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>{tr("Theme")}</span>
             </button>
 
             {/* Pro / Membership Badge & Upgrade Button */}
             <button
               id="header-upgrade-btn"
               onClick={() => setShowMonetizationModal(true)}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer font-mono font-bold ${
+              title="Membership & Pro Clinical Features"
+              className={`flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-xl border transition-all cursor-pointer font-mono font-bold shrink-0 ${
                 profile.membershipTier === "pro"
                   ? "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
                   : profile.membershipTier === "caregiver_plus"
@@ -2893,25 +2992,26 @@ export default function App() {
                   : "bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border-amber-500/40 hover:border-amber-400 active:scale-95"
               }`}
             >
-              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-              <span className="hidden sm:inline">
-                {profile.membershipTier === "pro" ? "Pro Member" : profile.membershipTier === "caregiver_plus" ? "Caregiver+" : "Upgrade Pro"}
+              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+              <span>
+                {profile.membershipTier === "pro" ? "Pro" : profile.membershipTier === "caregiver_plus" ? "Care+" : "Pro"}
               </span>
             </button>
 
             <button 
               id="header-profile-btn"
               onClick={() => changeTab("profile")}
-              className="flex items-center gap-2 text-xs text-stone-300 bg-neutral-800 hover:bg-neutral-750 px-2.5 py-1.5 rounded-xl border border-neutral-700/60 transition-all cursor-pointer"
+              title={`Profile: ${profile.name}`}
+              className="flex items-center gap-1 text-[10px] text-stone-300 bg-neutral-800 hover:bg-neutral-750 px-2 py-1.5 rounded-xl border border-neutral-700/60 transition-all cursor-pointer shrink-0"
             >
-              <User className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="font-medium truncate max-w-[80px]">{profile.name.split(" ")[0]}</span>
+              <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="font-medium truncate max-w-[48px]">{profile.name.split(" ")[0]}</span>
             </button>
           </div>
         </header>
 
         {/* TOP HORIZONTAL SCROLLABLE FEATURE NAVIGATION BAR */}
-        <div className="bg-neutral-900/90 border-b border-neutral-800 px-3 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 select-none text-[11px] font-mono">
+        <div className="bg-neutral-900/90 border-b border-neutral-800 px-3 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 select-none text-[11px] font-mono w-full">
           <button
             onClick={() => changeTab("dashboard")}
             className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -2919,7 +3019,7 @@ export default function App() {
             }`}
           >
             <Activity className="w-3.5 h-3.5" />
-            <span>Glucose Tracking</span>
+            <span>{t.glucoseTracking}</span>
           </button>
 
           <button
@@ -2929,7 +3029,7 @@ export default function App() {
             }`}
           >
             <Pill className="w-3.5 h-3.5" />
-            <span>Insulin & Meds</span>
+            <span>{t.insulinMeds}</span>
           </button>
 
           <button
@@ -2939,7 +3039,7 @@ export default function App() {
             }`}
           >
             <Utensils className="w-3.5 h-3.5" />
-            <span>Diet Planner</span>
+            <span>{t.dietPlanner}</span>
           </button>
 
           <button
@@ -2949,17 +3049,7 @@ export default function App() {
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            <span>Walking Tracker</span>
-          </button>
-
-          <button
-            onClick={() => changeTab("assistant")}
-            className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "assistant" ? "bg-teal-950/70 text-teal-300 border border-teal-500/40" : "bg-neutral-950 text-neutral-400 hover:text-white border border-neutral-800"
-            }`}
-          >
-            <BrainCircuit className="w-3.5 h-3.5" />
-            <span>AI Assistant</span>
+            <span>{t.walkingTracker}</span>
           </button>
 
           <button
@@ -2969,7 +3059,7 @@ export default function App() {
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Doctor's Report</span>
+            <span>{t.doctorsReport}</span>
           </button>
 
           <button
@@ -2979,7 +3069,7 @@ export default function App() {
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            <span>Family & WhatsApp</span>
+            <span>{t.familyWhatsapp}</span>
           </button>
 
           <button
@@ -2989,7 +3079,7 @@ export default function App() {
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>Diets Handbook</span>
+            <span>{t.dietsHandbook}</span>
           </button>
         </div>
 
@@ -3006,17 +3096,17 @@ export default function App() {
             >
             
             {/* Ambient greeting */}
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start" dir={activeLanguage.dir}>
               <div>
-                <h2 className="text-base font-bold text-white leading-tight">Welcome, {profile.name}</h2>
+                <h2 className="text-base font-bold text-white leading-tight">{t.welcome}, {profile.name}</h2>
                 <p className="text-[11px] text-emerald-400 flex items-center gap-1.5 font-mono mt-0.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  Active Diabetes Watch ({profile.diabetesType})
+                  {t.activeWatch} ({profile.diabetesType})
                 </p>
               </div>
               <div className="text-right text-[10px] text-neutral-400 font-mono">
-                <div>Fasting: {profile.targetFastingMin}-{profile.targetFastingMax} mg/dL</div>
-                <div>Post-Meal: {profile.targetPostMin}-{profile.targetPostMax} mg/dL</div>
+                <div>{t.fasting}: {profile.targetFastingMin}-{profile.targetFastingMax} mg/dL</div>
+                <div>{t.postMeal}: {profile.targetPostMin}-{profile.targetPostMax} mg/dL</div>
               </div>
             </div>
 
@@ -3549,7 +3639,7 @@ export default function App() {
                 className="p-2.5 bg-gradient-to-br from-teal-950/40 to-neutral-900 border border-teal-500/30 hover:border-teal-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
               >
                 <Bluetooth className="w-4 h-4 text-teal-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[10.5px] font-bold text-teal-300 leading-none">Sync Meter</span>
+                <span className="text-[10.5px] font-bold text-teal-300 leading-none">{tr("Sync Meter")}</span>
                 <span className="text-[8.5px] text-neutral-400 font-mono">BLE / USB / NFC</span>
               </button>
 
@@ -3560,7 +3650,7 @@ export default function App() {
                 className="p-2.5 bg-gradient-to-br from-indigo-950/40 to-neutral-900 border border-indigo-500/30 hover:border-indigo-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
               >
                 <Target className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[10.5px] font-bold text-indigo-300 leading-none">My Goals</span>
+                <span className="text-[10.5px] font-bold text-indigo-300 leading-none">{tr("My Goals")}</span>
                 <span className="text-[8.5px] text-neutral-400 font-mono">HbA1c &amp; TIR</span>
               </button>
 
@@ -3571,8 +3661,8 @@ export default function App() {
                 className="p-2.5 bg-gradient-to-br from-cyan-950/40 to-neutral-900 border border-cyan-500/30 hover:border-cyan-500/60 rounded-2xl flex flex-col items-center justify-center text-center gap-1 transition-all cursor-pointer shadow-sm group select-none"
               >
                 <Calendar className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[10.5px] font-bold text-cyan-300 leading-none">Weekly Review</span>
-                <span className="text-[8.5px] text-neutral-400 font-mono">Trends &amp; Backup</span>
+                <span className="text-[10.5px] font-bold text-cyan-300 leading-none">{tr("Weekly Review")}</span>
+                <span className="text-[8.5px] text-neutral-400 font-mono">{tr("Trends & Backup")}</span>
               </button>
             </div>
 
@@ -3584,12 +3674,12 @@ export default function App() {
                 onClick={() => setDashboardSubTab("logs")}
                 className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "logs"
-                    ? "bg-neutral-800 text-white shadow-sm"
+                    ? "bg-neutral-800 text-white border border-neutral-700 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                <Activity className="w-3.5 h-3.5" />
-                <span>Logs</span>
+                <Activity className="w-3.5 h-3.5 text-rose-400" />
+                <span>{tr("Logs")}</span>
               </button>
               <button
                 id="btn-dash-correlations-subtab"
@@ -3597,12 +3687,12 @@ export default function App() {
                 onClick={() => setDashboardSubTab("correlations")}
                 className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "correlations"
-                    ? "bg-amber-950/40 text-amber-300 border border-amber-500/25 shadow-sm"
+                    ? "bg-amber-950/60 text-amber-300 border border-amber-500/40 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                <span>Spikes</span>
+                <span>{tr("Spikes")}</span>
               </button>
               <button
                 id="btn-dash-food-subtab"
@@ -3610,12 +3700,12 @@ export default function App() {
                 onClick={() => setDashboardSubTab("food")}
                 className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "food"
-                    ? "bg-rose-955/25 text-rose-455 border border-rose-500/10 shadow-sm"
+                    ? "bg-rose-950/60 text-rose-300 border border-rose-500/40 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                <Utensils className="w-3.5 h-3.5" />
-                <span>Diet</span>
+                <Utensils className="w-3.5 h-3.5 text-rose-400" />
+                <span>{tr("Diet")}</span>
               </button>
               <button
                 id="btn-dash-wearables-subtab"
@@ -3623,12 +3713,12 @@ export default function App() {
                 onClick={() => setDashboardSubTab("wearables")}
                 className={`py-2 px-1 rounded-xl text-[10.5px] sm:text-xs font-bold transition-all text-center cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 select-none ${
                   dashboardSubTab === "wearables"
-                    ? "bg-indigo-950/45 text-indigo-455 border border-indigo-500/20 shadow-sm"
+                    ? "bg-indigo-950/60 text-indigo-300 border border-indigo-500/40 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                <Wifi className="w-3.5 h-3.5" />
-                <span>Sensors</span>
+                <Wifi className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{tr("Sensors")}</span>
               </button>
             </div>
 
@@ -4169,55 +4259,55 @@ export default function App() {
                 }`}
               >
                 <TrendingUp className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
-                <span className="truncate">7-Day Rolling</span>
+                <span className="truncate">{tr("7-Day Rolling")}</span>
               </button>
               <button
                 id="btn-report-chart-trend"
                 onClick={() => setReportChartType("trend")}
                 className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "trend"
-                    ? "bg-neutral-800 text-white shadow-sm"
+                    ? "bg-neutral-800 text-white border border-neutral-700 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Activity className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Raw Trend</span>
+                <span className="truncate">{tr("Raw Trend")}</span>
               </button>
               <button
                 id="btn-report-chart-variability"
                 onClick={() => setReportChartType("variability")}
                 className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "variability"
-                    ? "bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm"
+                    ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Variability</span>
+                <span className="truncate">{tr("Variability")}</span>
               </button>
               <button
                 id="btn-report-chart-weight"
                 onClick={() => setReportChartType("weight")}
                 className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "weight"
-                    ? "bg-rose-500/10 text-rose-455 border border-rose-500/20 shadow-sm"
+                    ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <Scale className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Weight</span>
+                <span className="truncate">{tr("Weight")}</span>
               </button>
               <button
                 id="btn-report-chart-adherence"
                 onClick={() => setReportChartType("adherence")}
                 className={`py-2 px-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 ${
                   reportChartType === "adherence"
-                    ? "bg-teal-500/10 text-teal-400 border border-teal-500/20 shadow-sm"
+                    ? "bg-teal-500/15 text-teal-300 border border-teal-500/30 shadow-sm"
                     : "text-neutral-400 hover:text-neutral-200"
                 }`}
               >
                 <CheckCircle className="w-3.5 h-3.5 shrink-0 text-teal-400" />
-                <span className="truncate">Adherence</span>
+                <span className="truncate">{tr("Adherence")}</span>
               </button>
             </div>
 
@@ -7137,20 +7227,6 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* --- SCREEN: AI ASSISTANT --- */}
-        {activeTab === "assistant" && (
-          <motion.div
-            key="assistant"
-            initial={{ opacity: 0, x: 15 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -15 }}
-            transition={{ duration: 0.12, ease: "easeOut" }}
-            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
-          >
-            <AiAssistantTab profile={profile} readings={readings} />
-          </motion.div>
-        )}
-
         {/* --- SCREEN: FAMILY MONITORING & WHATSAPP NOTIFICATIONS --- */}
         {activeTab === "family" && (
           <motion.div
@@ -7219,76 +7295,110 @@ export default function App() {
             />
           </motion.div>
         )}
+
+        {/* --- SCREEN 7: INTERNATIONAL LANGUAGES --- */}
+        {activeTab === "languages" && (
+          <motion.div
+            key="languages"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <LanguageSelectorTab
+              profile={profile}
+              onSelectLanguage={handleSelectLanguage}
+            />
+          </motion.div>
+        )}
+
+        {/* --- SCREEN 8: 6 COLOR SCHEMES (3 DARK & 3 LIGHT THEMES) --- */}
+        {activeTab === "themes" && (
+          <motion.div
+            key="themes"
+            initial={{ opacity: 0, x: 15 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -15 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto px-4 py-4 bg-neutral-950"
+          >
+            <ThemeSelectorTab
+              profile={profile}
+              onSelectTheme={handleSelectTheme}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       </div>
 
       {/* FIXED LOWER BOTTOM ANDROID TAB BAR FOR APP NAVIGATION */}
-      <nav className="bg-[#121214] border-t border-white/5 py-1 px-4 flex justify-between items-center shrink-0 z-15 select-none shrink-0">
+      <nav className="bg-neutral-900 border-t border-neutral-800 py-1 px-1.5 flex justify-between items-center shrink-0 z-15 select-none w-full overflow-hidden transition-colors duration-300">
         <button
           id="tab-btn-dashboard"
           onClick={() => changeTab("dashboard")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "dashboard" ? "text-rose-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <Activity className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">Console</span>
+          <Activity className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.consoleNav}</span>
         </button>
 
         <button
           id="tab-btn-reports"
           onClick={() => changeTab("reports")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "reports" ? "text-cyan-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <TrendingUp className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">Reports</span>
+          <TrendingUp className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.reportsNav}</span>
         </button>
 
         <button
           id="tab-btn-reminders"
           onClick={() => changeTab("reminders")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "reminders" ? "text-pink-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <Pill className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">Pills</span>
+          <Pill className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.pillsNav}</span>
         </button>
 
         <button
           id="tab-btn-handbook"
           onClick={() => changeTab("handbook")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "handbook" ? "text-indigo-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <BookOpen className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">Handbook</span>
+          <BookOpen className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.handbookNav}</span>
         </button>
 
         <button
           id="tab-btn-history"
           onClick={() => changeTab("history")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "history" ? "text-cyan-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <Clock className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">History</span>
+          <Clock className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.historyNav}</span>
         </button>
 
         <button
           id="tab-btn-profile"
           onClick={() => changeTab("profile")}
-          className={`flex-1 flex flex-col items-center justify-center py-2 transition-all cursor-pointer ${
+          className={`min-w-0 flex-1 flex flex-col items-center justify-center py-1.5 px-1 transition-all cursor-pointer ${
             activeTab === "profile" ? "text-teal-400 font-bold" : "text-neutral-500 hover:text-neutral-300"
           }`}
         >
-          <Settings className="w-5 h-5 block" />
-          <span className="text-[9px] mt-1 tracking-tight">Targets</span>
+          <Settings className="w-4 h-4 block shrink-0" />
+          <span className="text-[9px] mt-0.5 tracking-tight truncate w-full text-center">{t.targetsNav}</span>
         </button>
       </nav>
 

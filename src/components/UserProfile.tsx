@@ -503,13 +503,13 @@ export default function UserProfile({
             >
               <div className="flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5 text-purple-400" />
-                <span>More Mineral Matte Themes (Terracotta, Steel, Chalk)</span>
+                <span>All 6 Color Schemes (3 Dark Themes & 3 Light Themes)</span>
               </div>
               {showAllPalettes ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             {showAllPalettes && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2.5">
                 <button
                   id="theme-select-matte-terracotta"
                   type="button"
@@ -520,7 +520,7 @@ export default function UserProfile({
                       : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
                   }`}
                 >
-                  <div className="font-semibold text-neutral-200">Terracotta & Clay</div>
+                  <div className="font-semibold text-neutral-200">Terracotta (Dark)</div>
                   <div className="text-[9.5px] text-neutral-500 mb-1.5">Warm earthy stone</div>
                   <div className="flex gap-1 shrink-0">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#171413] border border-neutral-700"></span>
@@ -540,7 +540,7 @@ export default function UserProfile({
                       : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
                   }`}
                 >
-                  <div className="font-semibold text-neutral-200">Nordic Steel</div>
+                  <div className="font-semibold text-neutral-200">Nordic Steel (Dark)</div>
                   <div className="text-[9.5px] text-neutral-500 mb-1.5">Gunmetal & heather</div>
                   <div className="flex gap-1 shrink-0">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#12151a] border border-neutral-700"></span>
@@ -560,13 +560,33 @@ export default function UserProfile({
                       : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
                   }`}
                 >
-                  <div className="font-semibold text-neutral-200">Sand & Chalk</div>
+                  <div className="font-semibold text-neutral-200">Sand & Chalk (Light)</div>
                   <div className="text-[9.5px] text-neutral-500 mb-1.5">Soft paper daylight</div>
                   <div className="flex gap-1 shrink-0">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#f5f4ef] border border-neutral-400"></span>
                     <span className="w-2.5 h-2.5 rounded-full bg-[#3b614f]"></span>
                     <span className="w-2.5 h-2.5 rounded-full bg-[#8c423c]"></span>
                     <span className="w-2.5 h-2.5 rounded-full bg-[#385770]"></span>
+                  </div>
+                </button>
+
+                <button
+                  id="theme-select-clinical-mint"
+                  type="button"
+                  onClick={() => handlePaletteSelect("clinical-mint-light")}
+                  className={`p-2 rounded-xl border text-[10.5px] text-left transition-all cursor-pointer ${
+                    formData.theme === "clinical-mint-light"
+                      ? "bg-neutral-900 text-white border-neutral-600 ring-1 ring-neutral-500/30 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  <div className="font-semibold text-neutral-200">Clinical Mint (Light)</div>
+                  <div className="text-[9.5px] text-neutral-500 mb-1.5">Frosted glacier teal</div>
+                  <div className="flex gap-1 shrink-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#f0f9f7] border border-neutral-400"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#0f766e]"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#047857]"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#be123c]"></span>
                   </div>
                 </button>
               </div>
