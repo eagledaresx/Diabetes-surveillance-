@@ -122,6 +122,16 @@ import { applyGlobalInterfaceTranslation, translatePhrase } from "./lib/globalIn
 import { useChartBrushSync } from "./hooks/useChartBrushSync";
 import { MEDICINE_LIST, PRELOADED_MEDICINES } from "./data";
 import { GLOBAL_DIETARY_PROGRAMS } from "./data/diets";
+import {
+  classifyGlucoseReading,
+  isValidPhysiologicalGlucose,
+  computeStandardizedGlycemicMetrics,
+  computePharmacokineticIOB,
+  computeRolling30DayVariability,
+  calculateLinearRegression
+} from "./lib/medicalCalculations";
+import { scheduleServerVaultSync, safeSaveStorageItem } from "./lib/storageEngine";
+import { getAuthenticatedApiHeaders } from "./lib/securityAuth";
 
 // Preloaded initial readings
 const INITIAL_READINGS: GlucoseReading[] = [
@@ -359,49 +369,7 @@ const DEFAULT_PROFILE: UserProfileType = {
 
 // Calculate 30-day rolling glycemic variability (SD, mean, CV%) for each logged point
 function computeVariabilityData(readingsList: GlucoseReading[]): any[] {
-  if (readingsList.length === 0) return [];
-
-  // Sort readings oldest to newest
-  const sorted = [...readingsList].sort((a, b) => {
-    const comp = a.date.localeCompare(b.date);
-    if (comp !== 0) return comp;
-    return a.time.localeCompare(b.time);
-  });
-
-  return sorted.map((current) => {
-    const currentDate = new Date(current.date + "T" + current.time);
-    
-    // 30 days lookback time threshold
-    const thirtyDaysAgo = new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
-    // Find all readings fell within [currentDate - 30 days, currentDate]
-    const windowReadings = sorted.filter(r => {
-      const rDate = new Date(r.date + "T" + r.time);
-      return rDate >= thirtyDaysAgo && rDate <= currentDate;
-    });
-
-    const values = windowReadings.map(r => r.value);
-    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-    
-    let sd = 0;
-    if (values.length > 1) {
-      const sqDiffs = values.map(v => (v - mean) ** 2);
-      const avgSqDiff = sqDiffs.reduce((sum, d) => sum + d, 0) / (values.length - 1);
-      sd = Math.sqrt(avgSqDiff);
-    }
-
-    const cv = mean > 0 ? (sd / mean) * 100 : 0;
-
-    return {
-      ...current,
-      formattedLabel: `${current.date.substring(5)}`,
-      mean: Math.round(mean * 10) / 10,
-      sd: Math.round(sd * 10) / 10,
-      cv: Math.round(cv * 10) / 10,
-      count: values.length,
-      stability: cv < 36 ? "Stable" : "High"
-    };
-  });
+  return computeRolling30DayVariability(readingsList);
 }
 
 type AppTab = "dashboard" | "reports" | "reminders" | "handbook" | "profile" | "history" | "diet" | "walking" | "family" | "languages" | "themes";
@@ -516,7 +484,7 @@ export default function App() {
 
   // Play Store & Clinical Compliance Modals State
   const [disclaimerModalOpen, setDisclaimerModalOpen] = useState(() => {
-    return localStorage.getItem("dia_disclaimer_accepted") !== "true";
+    return localStorage.getItem("dia_disclaimer_accepted_v2") !== "true";
   });
   const [isBiometricLocked, setIsBiometricLocked] = useState(false);
   const [dangerousAlert, setDangerousAlert] = useState<{
@@ -809,36 +777,41 @@ export default function App() {
   };
 
   // Morning Fasting Glucose Alert Background Check Ticker (with Wake-Up Window & Smart Snooze support)
+  const fastingConfigRef = React.useRef(fastingReminderConfig);
+  fastingConfigRef.current = fastingReminderConfig;
+
   useEffect(() => {
     const checkFastingAlert = async () => {
-      if (!fastingReminderConfig.enabled) return;
+      const cfg = fastingConfigRef.current;
+      if (!cfg.enabled) return;
 
       const now = new Date();
-      const activeDays = fastingReminderConfig.activeDays || [0, 1, 2, 3, 4, 5, 6];
+      const activeDays = cfg.activeDays || [0, 1, 2, 3, 4, 5, 6];
       if (!activeDays.includes(now.getDay())) return;
 
       // If currently snoozed, check if snooze window has expired
-      if (fastingReminderConfig.snoozedUntil) {
-        if (Date.now() < fastingReminderConfig.snoozedUntil) {
+      if (cfg.snoozedUntil) {
+        if (Date.now() < cfg.snoozedUntil) {
           return;
         }
         // Snooze window expired -> fire escalated alert!
         const clearedSnooze = {
-          ...fastingReminderConfig,
+          ...cfg,
           snoozedUntil: null
         };
+        fastingConfigRef.current = clearedSnooze;
         setFastingReminderConfig(clearedSnooze);
         localStorage.setItem("dia_fasting_reminder_config", JSON.stringify(clearedSnooze));
 
-        if (fastingReminderConfig.soundEnabled) {
+        if (cfg.soundEnabled) {
           playNotificationChime();
-          if (fastingReminderConfig.autoEscalateSound) {
+          if (cfg.autoEscalateSound) {
             setTimeout(() => playNotificationChime(), 600);
           }
         }
-        if (fastingReminderConfig.vibrationEnabled) {
+        if (cfg.vibrationEnabled) {
           triggerHaptic(
-            fastingReminderConfig.autoEscalateSound
+            cfg.autoEscalateSound
               ? [300, 100, 300, 100, 450]
               : [200, 100, 200, 100, 300]
           );
@@ -850,37 +823,38 @@ export default function App() {
       const todayStamp = now.toISOString().split("T")[0];
 
       // Avoid duplicate alert triggers for today unless explicitly testing
-      if (fastingReminderConfig.lastTriggeredDate === todayStamp && !fastingReminderConfig.snoozedUntil) {
+      if (cfg.lastTriggeredDate === todayStamp && !cfg.snoozedUntil) {
         return;
       }
 
-      const effective = getEffectiveWakeWindow(fastingReminderConfig, now);
+      const effective = getEffectiveWakeWindow(cfg, now);
       const { preAlertTime, formattedTarget } = calculatePreAlertTime(
         effective.effectiveTarget,
-        fastingReminderConfig.leadMinutes || 15
+        cfg.leadMinutes || 15
       );
 
       if (isAlertTimeNow(preAlertTime)) {
         const updatedConfig: FastingReminderConfig = {
-          ...fastingReminderConfig,
+          ...cfg,
           lastTriggeredDate: todayStamp,
           currentSnoozeCount: 0,
           snoozedUntil: null
         };
+        fastingConfigRef.current = updatedConfig;
         setFastingReminderConfig(updatedConfig);
         localStorage.setItem("dia_fasting_reminder_config", JSON.stringify(updatedConfig));
 
-        if (fastingReminderConfig.soundEnabled) {
+        if (cfg.soundEnabled) {
           playNotificationChime();
         }
 
-        if (fastingReminderConfig.vibrationEnabled) {
+        if (cfg.vibrationEnabled) {
           triggerHaptic([200, 100, 200, 100, 300]);
         }
 
-        if (fastingReminderConfig.browserNotificationsEnabled) {
+        if (cfg.browserNotificationsEnabled) {
           await sendNativeNotification(
-            `🌅 Fasting Glucose Check in ${fastingReminderConfig.leadMinutes || 15} Minutes`,
+            `🌅 Fasting Glucose Check in ${cfg.leadMinutes || 15} Minutes`,
             {
               body: `Scheduled check at ${formattedTarget} (Wake Window ${effective.formattedStart}–${effective.formattedEnd}). Wash hands with warm water and rest 5 mins.`,
               tag: "morning-fasting-glucose-precheck"
@@ -892,10 +866,13 @@ export default function App() {
       }
     };
 
-    checkFastingAlert();
+    const initialTimer = setTimeout(checkFastingAlert, 500);
     const interval = setInterval(checkFastingAlert, 25000);
-    return () => clearInterval(interval);
-  }, [fastingReminderConfig]);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Synchronize CSS variable theme overrides based on patient profile selection
   useEffect(() => {
@@ -916,24 +893,30 @@ export default function App() {
       applyGlobalInterfaceTranslation(langCode, document.body);
     }, 60);
 
-    // Observe dynamic DOM additions (modals, sub-menus, dropdowns) to translate immediately
+    // Observe dynamic DOM additions (modals, sub-menus, dropdowns) and interactive state transitions
     let debounceTimer: number | null = null;
-    const observer = new MutationObserver(() => {
+    const scheduleTranslationPass = () => {
       if (debounceTimer) window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(() => {
         applyGlobalInterfaceTranslation(langCode, document.body);
       }, 45);
-    });
+    };
 
+    const observer = new MutationObserver(scheduleTranslationPass);
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
 
+    window.addEventListener("click", scheduleTranslationPass, { passive: true });
+    window.addEventListener("change", scheduleTranslationPass, { passive: true });
+
     return () => {
       window.clearTimeout(timer);
       if (debounceTimer) window.clearTimeout(debounceTimer);
       observer.disconnect();
+      window.removeEventListener("click", scheduleTranslationPass);
+      window.removeEventListener("change", scheduleTranslationPass);
     };
   }, [
     profile.language,
@@ -962,6 +945,20 @@ export default function App() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [profile.biometricEnabled]);
+
+  // Synchronize validated clinical data with local checksum & backend clinical vault
+  useEffect(() => {
+    if (readings.length === 0 && foodLogs.length === 0) return;
+    safeSaveStorageItem("dia_readings", readings);
+    scheduleServerVaultSync({
+      readings,
+      profile: profile as unknown as Record<string, unknown>,
+      meals: foodLogs,
+      activities: activityLogs,
+      medLogs,
+      reminders,
+    });
+  }, [readings, profile, foodLogs, activityLogs, medLogs, reminders]);
 
   // Sync tab transitions helper for Android native back pressed
   const changeTab = (tab: AppTab) => {
@@ -1030,7 +1027,8 @@ export default function App() {
 
   const handleDeleteProfile = (id: string) => {
     if (id === activeProfileId) {
-      alert("Cannot delete the active profile. Please switch to another profile first.");
+      setExportFeedback("Error: Cannot delete the active profile. Please switch to another profile first.");
+      setTimeout(() => setExportFeedback(""), 4000);
       return;
     }
     const updatedProfiles = profiles.filter(p => p.id !== id);
@@ -1077,41 +1075,14 @@ export default function App() {
   const handleAddReading = (e: React.FormEvent) => {
     e.preventDefault();
     const val = Number(logValue);
-    if (isNaN(val) || val <= 0) {
-      alert("Please enter a valid blood sugar reading in mg/dL.");
+    if (!isValidPhysiologicalGlucose(val)) {
+      setExportFeedback("Error: Please enter a valid physiological blood sugar reading between 20 and 600 mg/dL.");
+      setTimeout(() => setExportFeedback(""), 4000);
       return;
     }
 
-    // Determine category based on custom user targets defined in profile settings
-    let cat: GlucoseReading["category"] = "Normal";
-    if (val < 70) {
-      cat = "Hypoglycemia";
-    } else if (logType === "fasting") {
-      if (val >= 250) {
-        cat = "Severe Hyperglycemia";
-      } else if (val > profile.targetFastingMax) {
-        cat = "Diabetes";
-      } else if (val > 100) {
-        cat = "Prediabetes";
-      } else if (val >= profile.targetFastingMin) {
-        cat = "Normal";
-      } else {
-        cat = "Normal"; // between 70 and min (though under target, still classified safe if >= 70)
-      }
-    } else {
-      // post fasting (after meal)
-      if (val >= 250) {
-        cat = "Severe Hyperglycemia";
-      } else if (val > profile.targetPostMax) {
-        cat = "Diabetes";
-      } else if (val > 140) {
-        cat = "Prediabetes";
-      } else if (val >= profile.targetPostMin) {
-        cat = "Normal";
-      } else {
-        cat = "Normal";
-      }
-    }
+    // Determine category based on ADA 2025 & user clinical target thresholds
+    const cat: GlucoseReading["category"] = classifyGlucoseReading(val, logType, profile);
 
     const newReading: GlucoseReading = {
       id: "gly_" + Date.now(),
@@ -1276,30 +1247,7 @@ export default function App() {
   };
 
   const handleQuickLogGlucoseFromFood = (value: number, date: string, time: string, type: "fasting" | "post_fasting", notes: string) => {
-    let cat: GlucoseReading["category"] = "Normal";
-    if (value < 70) {
-      cat = "Hypoglycemia";
-    } else if (type === "fasting") {
-      if (value >= 250) {
-        cat = "Severe Hyperglycemia";
-      } else if (value > profile.targetFastingMax) {
-        cat = "Diabetes";
-      } else if (value > 100) {
-        cat = "Prediabetes";
-      } else {
-        cat = "Normal";
-      }
-    } else {
-      if (value >= 250) {
-        cat = "Severe Hyperglycemia";
-      } else if (value > profile.targetPostMax) {
-        cat = "Diabetes";
-      } else if (value > 140) {
-        cat = "Prediabetes";
-      } else {
-        cat = "Normal";
-      }
-    }
+    const cat: GlucoseReading["category"] = classifyGlucoseReading(value, type, profile);
 
     const newReading: GlucoseReading = {
       id: "gly_" + Date.now(),
@@ -1860,7 +1808,7 @@ export default function App() {
     try {
       const response = await fetch(getApiUrl("/api/surveillance-insights"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthenticatedApiHeaders(),
         body: JSON.stringify({
           readings: readings,
           userProfile: simpleProfile
@@ -1970,9 +1918,9 @@ export default function App() {
     };
   }, [todayLogCount, complianceScore]);
 
-  // Dynamic benchmark reference date for the time-window filters
-  const getBenchmarkDate = () => {
-    let ref = new Date("2026-06-04"); // Fallback to current static sandbox date
+  // Dynamic benchmark reference date for the time-window filters (memoized to prevent render loops)
+  const benchmarkRef = useMemo(() => {
+    let ref = new Date("2026-06-04");
     if (readings.length > 0) {
       const dates = readings.map(r => new Date(r.date).getTime());
       const maxTime = Math.max(...dates);
@@ -1981,46 +1929,55 @@ export default function App() {
       }
     }
     return ref;
-  };
+  }, [readings]);
 
-  const benchmarkRef = getBenchmarkDate();
+  const { finalStartMs, finalEndMs } = useMemo(() => {
+    let startMs = 0;
+    let endMs = 0;
 
-  let finalStartMs = 0;
-  let finalEndMs = 0;
+    if (reportTimeRange === "custom") {
+      const dStart = customStartDate ? new Date(customStartDate + "T00:00:00") : null;
+      const dEnd = customEndDate ? new Date(customEndDate + "T23:59:59") : null;
 
-  if (reportTimeRange === "custom") {
-    const dStart = customStartDate ? new Date(customStartDate + "T00:00:00") : null;
-    const dEnd = customEndDate ? new Date(customEndDate + "T23:59:59") : null;
-    
-    finalStartMs = dStart && !isNaN(dStart.getTime()) 
-      ? dStart.getTime() 
-      : (benchmarkRef.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
-    finalEndMs = dEnd && !isNaN(dEnd.getTime()) 
-      ? dEnd.getTime() 
-      : benchmarkRef.getTime();
-  } else {
-    const timeRangeDays = parseInt(reportTimeRange) || 30;
-    finalStartMs = benchmarkRef.getTime() - timeRangeDays * 24 * 60 * 60 * 1000;
-    finalEndMs = benchmarkRef.getTime();
-  }
+      startMs = dStart && !isNaN(dStart.getTime())
+        ? dStart.getTime()
+        : (benchmarkRef.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // Ensure start is before end
-  if (finalStartMs > finalEndMs) {
-    const tmp = finalStartMs;
-    finalStartMs = finalEndMs;
-    finalEndMs = tmp;
-  }
+      endMs = dEnd && !isNaN(dEnd.getTime())
+        ? dEnd.getTime()
+        : benchmarkRef.getTime();
+    } else {
+      const timeRangeDays = parseInt(reportTimeRange) || 30;
+      startMs = benchmarkRef.getTime() - timeRangeDays * 24 * 60 * 60 * 1000;
+      endMs = benchmarkRef.getTime();
+    }
 
-  // Filter readings within the chosen time window
-  const readingsInTimeWindow = readings.filter(r => {
-    const rTime = new Date((r.date || "2026-01-01") + "T12:00:00").getTime();
-    return rTime >= finalStartMs && rTime <= finalEndMs;
-  });
+    if (startMs > endMs) {
+      const tmp = startMs;
+      startMs = endMs;
+      endMs = tmp;
+    }
+
+    return { finalStartMs: startMs, finalEndMs: endMs };
+  }, [reportTimeRange, customStartDate, customEndDate, benchmarkRef]);
+
+  // Filter readings within the chosen time window (memoized)
+  const readingsInTimeWindow = useMemo(() => {
+    return readings.filter(r => {
+      const rTime = new Date((r.date || "2026-01-01") + "T12:00:00").getTime();
+      return rTime >= finalStartMs && rTime <= finalEndMs;
+    });
+  }, [readings, finalStartMs, finalEndMs]);
 
   // Calculate window-specific averages for persistent lines
-  const windowFastingLogs = readingsInTimeWindow.filter(r => r.type === "fasting");
-  const windowPostLogs = readingsInTimeWindow.filter(r => r.type === "post_fasting");
+  const windowFastingLogs = useMemo(
+    () => readingsInTimeWindow.filter(r => r.type === "fasting"),
+    [readingsInTimeWindow]
+  );
+  const windowPostLogs = useMemo(
+    () => readingsInTimeWindow.filter(r => r.type === "post_fasting"),
+    [readingsInTimeWindow]
+  );
 
   const windowAvgFasting = windowFastingLogs.length
     ? Math.round(windowFastingLogs.reduce((acc, curr) => acc + curr.value, 0) / windowFastingLogs.length)
@@ -2030,10 +1987,12 @@ export default function App() {
     ? Math.round(windowPostLogs.reduce((acc, curr) => acc + curr.value, 0) / windowPostLogs.length)
     : null;
 
-  // Sort them chronological to render left-to-right correctly
-  const rangeSortedReadings = [...readingsInTimeWindow].sort((a, b) => {
-    return a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
-  });
+  // Sort them chronological to render left-to-right correctly (memoized)
+  const rangeSortedReadings = useMemo(() => {
+    return [...readingsInTimeWindow].sort((a, b) => {
+      return a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
+    });
+  }, [readingsInTimeWindow]);
 
   // Helper: get Monday date string
   const getMondayStr = (dateStr: string) => {
@@ -2369,37 +2328,10 @@ export default function App() {
     }
   }
 
-  // Standardized Diabetes Metrics (TIR %, eAG, Estimated HbA1c)
+  // Standardized Diabetes Metrics (TIR %, eAG, GMI, Estimated HbA1c, CV%, J-Index)
   const tirMetrics = useMemo(() => {
     const days = parseInt(reportTimeRange) || 30;
-    const cutoffMs = benchmarkRef.getTime() - days * 24 * 60 * 60 * 1000;
-    const filteredReadings = readings.filter(r => {
-      const t = new Date(r.date + "T" + (r.time || "12:00")).getTime();
-      return t >= cutoffMs;
-    });
-
-    const total = filteredReadings.length || 1;
-    const inRange = filteredReadings.filter(r => r.value >= 70 && r.value <= 180).length;
-    const hypo = filteredReadings.filter(r => r.value < 70).length;
-    const severeHypo = filteredReadings.filter(r => r.value < 54).length;
-    const hyper = filteredReadings.filter(r => r.value > 180).length;
-    const severeHyper = filteredReadings.filter(r => r.value > 250).length;
-
-    const sum = filteredReadings.reduce((acc, r) => acc + r.value, 0);
-    const meanGlucose = Math.round(sum / total);
-    const estHbA1c = Math.round(((meanGlucose + 46.7) / 28.7) * 10) / 10;
-
-    return {
-      timeWindowDays: days,
-      totalCount: filteredReadings.length,
-      inRangePct: Math.round((inRange / total) * 100),
-      hypoPct: Math.round((hypo / total) * 100),
-      severeHypoPct: Math.round((severeHypo / total) * 100),
-      hyperPct: Math.round((hyper / total) * 100),
-      severeHyperPct: Math.round((severeHyper / total) * 100),
-      eAG: meanGlucose,
-      estimatedHbA1c: isNaN(estHbA1c) ? 5.7 : estHbA1c
-    };
+    return computeStandardizedGlycemicMetrics(readings, days, benchmarkRef.getTime());
   }, [readings, reportTimeRange, benchmarkRef]);
 
   // Account Deletion & Health Data Rights Handlers (Google Play Compliance)
@@ -2439,57 +2371,18 @@ export default function App() {
     setPrescribedMeds([]);
     setActivityLogs([]);
     setProfile(DEFAULT_PROFILE);
-    setProfiles([]);
-    setActiveProfileId("");
-    alert("Account and all health data permanently wiped from device sandbox.");
+    setProfiles([DEFAULT_PROFILE]);
+    setActiveProfileId(DEFAULT_PROFILE.id || "p1");
+    setExportFeedback("Success: Account and all health data permanently wiped from device sandbox.");
+    setTimeout(() => setExportFeedback(""), 5000);
     setActiveTab("dashboard");
   };
 
-  // Calculate active Insulin-on-Board (IOB) based on 4-hour linear decay model
-  const computeIOBData = () => {
-    const now = new Date();
-    let totalIOB = 0;
-    const activeInjections: {
-      id: string;
-      name: string;
-      administeredHoursAgo: number;
-      initialUnits: number;
-      remainingUnits: number;
-      takenAt: string;
-    }[] = [];
-
-    // Filter medication logs
-    medLogs.forEach(log => {
-      const r = reminders.find(rem => rem.id === log.reminderId);
-      const isInsulin = r?.isInsulin || log.medicineName.toLowerCase().includes("insulin");
-      if (isInsulin && log.unitsAdministered !== undefined) {
-        const logTime = new Date(log.takenAt);
-        const diffMs = now.getTime() - logTime.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-
-        if (diffHours >= 0 && diffHours < 4) {
-          // Linear decay: remaining = units * (1 - hours/4)
-          const remaining = log.unitsAdministered * (1 - diffHours / 4);
-          totalIOB += remaining;
-          activeInjections.push({
-            id: log.id,
-            name: log.medicineName,
-            administeredHoursAgo: diffHours,
-            initialUnits: log.unitsAdministered,
-            remainingUnits: Math.round(remaining * 100) / 100,
-            takenAt: logTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          });
-        }
-      }
-    });
-
-    return {
-      activeIOB: Math.round(totalIOB * 10) / 10,
-      activeInjections: activeInjections.sort((a, b) => a.administeredHoursAgo - b.administeredHoursAgo) // newest first
-    };
-  };
-
-  const { activeIOB, activeInjections } = computeIOBData();
+  // Calculate active Insulin-on-Board (IOB) using bi-exponential pharmacokinetic model
+  const { activeIOB, activeInjections } = useMemo(
+    () => computePharmacokineticIOB(medLogs, reminders),
+    [medLogs, reminders]
+  );
 
   const handleExportAggregatedToCSV = () => {
     if (filteredChartData.length === 0) {
@@ -3019,22 +2912,33 @@ export default function App() {
               <span>{tr("Theme")}</span>
             </button>
 
-            {/* Pro / Membership Badge & Upgrade Button */}
+            {/* Prominent Medical Disclaimer & Policy Button */}
+            <button
+              id="header-disclaimer-btn"
+              onClick={() => setDisclaimerModalOpen(true)}
+              title="Medical Disclaimer, Hardware Disclosure & Clinical Citations"
+              className="flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-xl border bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25 transition-all cursor-pointer font-mono font-bold shrink-0"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">{tr("Disclaimer")}</span>
+            </button>
+
+            {/* Free Clinical Care Modes & Compliance Badge */}
             <button
               id="header-upgrade-btn"
               onClick={() => setShowMonetizationModal(true)}
-              title="Membership & Pro Clinical Features"
+              title="Free Clinical Care Modes & Google Play Policy Compliance"
               className={`flex items-center gap-1 text-[10px] px-2 py-1.5 rounded-xl border transition-all cursor-pointer font-mono font-bold shrink-0 ${
                 profile.membershipTier === "pro"
-                  ? "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25"
                   : profile.membershipTier === "caregiver_plus"
                   ? "bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25"
-                  : "bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border-amber-500/40 hover:border-amber-400 active:scale-95"
+                  : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:border-emerald-400 active:scale-95"
               }`}
             >
-              <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+              <Crown className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>
-                {profile.membershipTier === "pro" ? "Pro" : profile.membershipTier === "caregiver_plus" ? "Care+" : "Pro"}
+                {profile.membershipTier === "pro" ? "Pro" : profile.membershipTier === "caregiver_plus" ? "Care+" : "Care"}
               </span>
             </button>
 
@@ -4813,7 +4717,6 @@ export default function App() {
                               startIndex={brushRange.startIndex}
                               endIndex={brushRange.endIndex}
                               onChange={handleBrushChange}
-                              tickFormatter={(val) => val}
                             />
                           </AreaChart>
                         ) : (
@@ -4932,7 +4835,6 @@ export default function App() {
                               startIndex={brushRange.startIndex}
                               endIndex={brushRange.endIndex}
                               onChange={handleBrushChange}
-                              tickFormatter={(val) => val}
                             />
                           </BarChart>
                         )}
@@ -7396,6 +7298,33 @@ export default function App() {
 
       </div>
 
+      {/* PERSISTENT GOOGLE PLAY MEDICAL & HARDWARE DISCLAIMER BAR */}
+      <div className="bg-neutral-950/95 border-t border-neutral-800/90 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[9.5px] text-neutral-400 shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+          <span className="truncate">
+            Not a medical device • External glucometer/CGM required • Consult a physician before dosing
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 font-mono shrink-0">
+          <button
+            type="button"
+            onClick={() => setDisclaimerModalOpen(true)}
+            className="text-amber-300 hover:text-amber-200 underline cursor-pointer"
+          >
+            Disclaimer &amp; Citations
+          </button>
+          <a
+            href="/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-cyan-400 hover:text-cyan-300 underline"
+          >
+            Privacy &amp; Data Deletion
+          </a>
+        </div>
+      </div>
+
       {/* FIXED LOWER BOTTOM ANDROID TAB BAR FOR APP NAVIGATION */}
       <nav className="bg-neutral-900 border-t border-neutral-800 py-1 px-1.5 flex justify-between items-center shrink-0 z-15 select-none w-full overflow-hidden transition-colors duration-300">
         <button
@@ -7470,6 +7399,7 @@ export default function App() {
         isOpen={disclaimerModalOpen}
         onAccept={() => {
           localStorage.setItem("dia_disclaimer_accepted", "true");
+          localStorage.setItem("dia_disclaimer_accepted_v2", "true");
           setDisclaimerModalOpen(false);
         }}
       />
@@ -7621,23 +7551,7 @@ export default function App() {
 
 // Low-level helper: Linear Regression Fit
 function calculateRegression(points: { x: number; y: number }[]): { slope: number; intercept: number } | null {
-  if (points.length < 2) return null;
-  const n = points.length;
-  let sumX = 0;
-  let sumY = 0;
-  let sumXY = 0;
-  let sumXX = 0;
-  for (let i = 0; i < n; i++) {
-    sumX += points[i].x;
-    sumY += points[i].y;
-    sumXY += points[i].x * points[i].y;
-    sumXX += points[i].x * points[i].x;
-  }
-  const denominator = n * sumXX - sumX * sumX;
-  if (denominator === 0) return null;
-  const slope = (n * sumXY - sumX * sumY) / denominator;
-  const intercept = (sumY - slope * sumX) / n;
-  return { slope, intercept };
+  return calculateLinearRegression(points);
 }
 
 // Low-level helper icons & utilities

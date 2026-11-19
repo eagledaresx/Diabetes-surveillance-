@@ -1,4 +1,4 @@
-package com.yourdomain.diabetesapp;
+package com.diabetescare.surveillance.twa;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -11,18 +11,20 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
           name: 'Diabetes Care & Tracker',
-          short_name: 'Diabetes Care',
-          description: 'An Android-inspired app for monitoring fasting and post-fasting blood glucose, providing graphical reports, medication reminders, and medical guides.',
+          short_name: 'DiabetesCare',
+          description: 'Clinical blood glucose tracker for monitoring fasting and post-meal glucose, HbA1c estimation, insulin dosing, medication reminders, and CGM telemetry.',
           theme_color: '#09090b',
           background_color: '#09090b',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
           scope: '/',
+          categories: ['medical', 'health', 'fitness'],
+          prefer_related_applications: false,
           icons: [
             {
               src: '/pwa-192x192.png',

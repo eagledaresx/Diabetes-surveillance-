@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Lock, Fingerprint, KeyRound, ShieldCheck, AlertCircle } from "lucide-react";
+import { verifyPinCode } from "../lib/securityAuth";
 
 interface BiometricLockModalProps {
   isOpen: boolean;
@@ -24,9 +25,11 @@ export default function BiometricLockModal({ isOpen, pinCode = "1234", patientNa
     }, 800);
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPin === pinCode || enteredPin === "1234" || enteredPin === "0000") {
+    const isValid = await verifyPinCode(enteredPin, pinCode);
+    if (isValid) {
+      setError("");
       onUnlock();
     } else {
       setError("Invalid Security PIN code. Please try again.");

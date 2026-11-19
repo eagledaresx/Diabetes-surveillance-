@@ -48,7 +48,11 @@ export function useChartBrushSync<T extends ChartDataItem>(
   // Update brush range & record temporal boundaries when user interacts with brush
   const handleBrushChange = useCallback((range: { startIndex?: number; endIndex?: number }) => {
     if (range && typeof range.startIndex === "number" && typeof range.endIndex === "number") {
-      setBrushRangeState({ startIndex: range.startIndex, endIndex: range.endIndex });
+      setBrushRangeState((prev) =>
+        prev.startIndex === range.startIndex && prev.endIndex === range.endIndex
+          ? prev
+          : { startIndex: range.startIndex, endIndex: range.endIndex }
+      );
 
       if (dataset && dataset.length > 0) {
         const startItem = dataset[Math.max(0, Math.min(dataset.length - 1, range.startIndex))];
@@ -65,14 +69,18 @@ export function useChartBrushSync<T extends ChartDataItem>(
         }
       }
     } else {
-      setBrushRangeState({});
+      setBrushRangeState((prev) =>
+        prev.startIndex === undefined && prev.endIndex === undefined ? prev : {}
+      );
       temporalBoundsRef.current = null;
     }
   }, [dataset, getItemTimestamp]);
 
   // Reset zoom selection
   const resetBrush = useCallback(() => {
-    setBrushRangeState({});
+    setBrushRangeState((prev) =>
+      prev.startIndex === undefined && prev.endIndex === undefined ? prev : {}
+    );
     temporalBoundsRef.current = null;
   }, []);
 
@@ -88,7 +96,9 @@ export function useChartBrushSync<T extends ChartDataItem>(
   // Synchronize brush range whenever dataset or aggregation mode changes
   useEffect(() => {
     if (!dataset || dataset.length === 0) {
-      setBrushRangeState({});
+      setBrushRangeState((prev) =>
+        prev.startIndex === undefined && prev.endIndex === undefined ? prev : {}
+      );
       return;
     }
 
@@ -125,7 +135,11 @@ export function useChartBrushSync<T extends ChartDataItem>(
         newEndIndex = temp;
       }
 
-      setBrushRangeState({ startIndex: newStartIndex, endIndex: newEndIndex });
+      setBrushRangeState((prev) =>
+        prev.startIndex === newStartIndex && prev.endIndex === newEndIndex
+          ? prev
+          : { startIndex: newStartIndex, endIndex: newEndIndex }
+      );
     }
   }, [dataset, reportAggregation, getItemTimestamp]);
 

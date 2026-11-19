@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">Diabetes Care &amp; Tracker</string>
     <string name="title_activity_main">Diabetes Care &amp; Tracker</string>
-    <string name="package_name">com.yourdomain.diabetesapp</string>
-    <string name="custom_url_scheme">com.yourdomain.diabetesapp</string>
+    <string name="package_name">com.diabetescare.surveillance.twa</string>
+    <string name="custom_url_scheme">com.diabetescare.surveillance.twa</string>
+    <string name="asset_statements" translatable="false">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://ais-pre-cyzibzzrlvl2gwnh2cnwfa-944506148515.asia-southeast1.run.app\" } }]</string>
 </resources>

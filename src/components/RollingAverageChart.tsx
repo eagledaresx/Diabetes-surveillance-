@@ -615,14 +615,12 @@ export const RollingAverageChart: React.FC<RollingAverageChartProps> = ({
                   stroke="#737373"
                   fontSize={10}
                   tickLine={false}
-                  axisLine={{ stroke: "#404040" }}
                 />
                 <YAxis
                   stroke="#737373"
                   fontSize={10}
-                  domain={[50, (dataMax: number) => Math.max(220, Math.ceil(dataMax / 20) * 20)]}
+                  domain={[50, 240]}
                   tickLine={false}
-                  axisLine={{ stroke: "#404040" }}
                 />
 
                 {/* Target Range Reference Lines */}

@@ -200,18 +200,22 @@ export function calculatePreAlertTime(targetTime: string, leadMinutes: number = 
 }
 
 /**
- * Checks if current time is within the alert window for today (same minute or within 2 minutes)
+ * Checks if current time is within the alert window for today (same minute or up to 2 minutes after to survive background tab throttling)
  */
-export function isAlertTimeNow(alertTime: string): boolean {
+export function isAlertTimeNow(alertTime: string, windowMinutes: number = 2): boolean {
   const now = new Date();
-  const currentH = now.getHours();
-  const currentM = now.getMinutes();
-  const currentMinutes = currentH * 60 + currentM;
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const [aH, aM] = alertTime.split(":").map(Number);
+  const [aH, aM] = (alertTime || "07:15").split(":").map(Number);
+  if (isNaN(aH) || isNaN(aM)) return false;
   const alertMinutes = aH * 60 + aM;
 
-  return currentMinutes === alertMinutes;
+  let diff = currentMinutes - alertMinutes;
+  if (diff < -720) {
+    diff += 24 * 60; // Midnight wrap-around support
+  }
+
+  return diff >= 0 && diff <= windowMinutes;
 }
 
 /**
@@ -220,7 +224,8 @@ export function isAlertTimeNow(alertTime: string): boolean {
 export function getCountdownToAlert(alertTime: string): string {
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const [aH, aM] = alertTime.split(":").map(Number);
+  const [aH, aM] = (alertTime || "07:15").split(":").map(Number);
+  if (isNaN(aH) || isNaN(aM)) return "soon";
   const alertMinutes = aH * 60 + aM;
 
   let diffMinutes = alertMinutes - currentMinutes;
@@ -238,14 +243,29 @@ export function getCountdownToAlert(alertTime: string): string {
   return `in ${hours}h ${mins}m`;
 }
 
+// Shared singleton AudioContext to prevent browser hardware context exhaustion (max 6 contexts)
+let sharedAudioContext: AudioContext | null = null;
+
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    sharedAudioContext = new AudioCtx();
+  }
+  if (sharedAudioContext.state === "suspended") {
+    sharedAudioContext.resume().catch(() => {});
+  }
+  return sharedAudioContext;
+}
+
 /**
  * Synthesizes a soothing medical audio chime using the Web Audio API.
  */
 export function playNotificationChime(): void {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
 
     // Gentle chord: D5 (587.33Hz) followed by A5 (880Hz) and high D6 (1174.66Hz)
     const notes = [
@@ -267,6 +287,15 @@ export function playNotificationChime(): void {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
+
+      osc.onended = () => {
+        try {
+          osc.disconnect();
+          gain.disconnect();
+        } catch {
+          // ignore
+        }
+      };
 
       osc.start(ctx.currentTime + start);
       osc.stop(ctx.currentTime + start + duration);
